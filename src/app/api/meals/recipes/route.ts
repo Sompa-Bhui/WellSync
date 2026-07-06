@@ -91,8 +91,6 @@ export async function GET(req: NextRequest) {
 
       // 2. Allergy Check (Critical Safety)
       let containsAllergen = false;
-      let matchedAllergen = '';
-      
       for (const allergen of activeAllergies) {
         if (!allergen) continue;
         
@@ -102,7 +100,6 @@ export async function GET(req: NextRequest) {
         
         if (matchInIngredients || matchInName) {
           containsAllergen = true;
-          matchedAllergen = allergen;
           break;
         }
       }

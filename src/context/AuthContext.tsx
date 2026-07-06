@@ -1,12 +1,29 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 
+type User = {
+  id: string;
+  email: string;
+  name: string;
+  healthProfile?: unknown;
+  familyProfiles?: FamilyProfile[];
+};
+
+type FamilyProfile = {
+  id: string;
+  name: string;
+  relationship: string;
+  allergies?: string | null;
+  foodRestrictions?: string | null;
+  dietaryPreference?: string | null;
+};
+
 interface AuthContextType {
-  user: any;
-  activeProfile: any;
-  familyProfiles: any[];
+  user: User | null;
+  activeProfile: FamilyProfile | null;
+  familyProfiles: FamilyProfile[];
   isLoading: boolean;
   refreshSession: () => Promise<void>;
   switchProfile: (profileId: string) => Promise<void>;
@@ -16,14 +33,14 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<any>(null);
-  const [activeProfile, setActiveProfile] = useState<any>(null);
-  const [familyProfiles, setFamilyProfiles] = useState<any[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [activeProfile, setActiveProfile] = useState<FamilyProfile | null>(null);
+  const [familyProfiles, setFamilyProfiles] = useState<FamilyProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
 
-  const fetchSession = async () => {
+  const fetchSession = useCallback(async () => {
     try {
       const res = await fetch('/api/auth/me');
       if (res.ok) {
@@ -54,11 +71,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [pathname, router]);
 
   useEffect(() => {
-    fetchSession();
-  }, [pathname]);
+    const timer = setTimeout(() => {
+      void fetchSession();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchSession]);
 
   const switchProfile = async (profileId: string) => {
     setIsLoading(true);

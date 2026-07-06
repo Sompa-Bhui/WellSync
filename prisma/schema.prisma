@@ -161,6 +161,7 @@ model Medication {
   
   name            String
   dosage          String        // e.g. "500mg", "1 pill", "2 drops"
+  unit            String        @default("mg")
   frequency       String        // DAILY, TWICE_DAILY, WEEKLY, AS_NEEDED
   scheduleTimes   String        // Comma-separated times, e.g. "08:00,20:00"
   instructions    String?       // e.g. "Take after food"

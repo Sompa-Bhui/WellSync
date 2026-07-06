@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/src/context/AuthContext';
 import DashboardShell from '@/src/components/DashboardShell';
@@ -10,7 +10,6 @@ import {
   Droplet,
   Moon,
   Scale,
-  Activity,
   Pill,
   Calendar,
   AlertTriangle,
@@ -22,11 +21,20 @@ import {
 
 export default function DashboardPage() {
   const { activeProfile } = useAuth();
-  const [data, setData] = useState<any>(null);
+  type OverviewData = {
+    alerts?: string[];
+    nutrition: { summary: { calories: number; protein: number; carbs: number; fats: number }; targetCalories: number; targetProtein: number };
+    hydration: { total: number; target: number };
+    sleep: { durationHours: number; durationMinutes: number } | null;
+    vitals: { currentWeight: number | null; targetWeight: number | null };
+    medications: { completed: number; total: number; events: Array<{ id: string; scheduledTime: string; status: string; medication: { name: string; dosage: string } }> };
+    nextAppointment: { id: string; doctorName: string; specialty: string; clinic: string; date: string; time: string; status: string } | null;
+  };
+  const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
-  const fetchOverview = async () => {
+  const fetchOverview = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/dashboard/overview?date=${date}`);
@@ -39,11 +47,14 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [date]);
 
   useEffect(() => {
-    fetchOverview();
-  }, [date, activeProfile]);
+    const timer = setTimeout(() => {
+      void fetchOverview();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchOverview, activeProfile]);
 
   if (loading) {
     return (
@@ -239,7 +250,7 @@ export default function DashboardPage() {
 
             <div className="space-y-3.5">
               {data.medications.events && data.medications.events.length > 0 ? (
-                data.medications.events.map((event: any) => (
+                data.medications.events.map((event) => (
                   <div key={event.id} className="flex items-center justify-between p-3.5 rounded-lg bg-background border border-border/60">
                     <div className="flex items-start space-x-3.5 min-w-0">
                       <div className={`p-1.5 rounded-lg mt-0.5 ${

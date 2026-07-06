@@ -1,21 +1,11 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import { AuthProvider } from "@/src/context/AuthContext";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import type { Metadata } from 'next';
+import './globals.css';
+import { AuthProvider } from '@/src/context/AuthContext';
 
 export const metadata: Metadata = {
-  title: "WellSync — Connected Personal Health & Care Platform",
-  description: "A secure connected personal health, nutrition, hydration, sleep, medication, appointments, and family care coordination workspace.",
+  title: 'WellSync - Connected Personal Health & Care Platform',
+  description:
+    'A secure connected personal health, nutrition, hydration, sleep, medication, appointments, and family care coordination workspace.',
 };
 
 export default function RootLayout({
@@ -24,14 +14,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

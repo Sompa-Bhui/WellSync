@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ShieldAlert, Loader2 } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import { Input, Button, Card } from '@/src/components/ui/primitives';
 
 export default function LoginPage() {

@@ -19,13 +19,44 @@ export async function GET(req: NextRequest) {
       take: limit,
     });
 
-    return NextResponse.json(entries.reverse()); // return chronological
+    return NextResponse.json(entries.reverse());
   } catch (error) {
     console.error('Weight GET error:', error);
     return NextResponse.json(
       { error: 'Internal server error occurred' },
       { status: 500 }
     );
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const activeProfile = await getActiveProfile(user.id);
+    const url = new URL(req.url);
+    const id = url.searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'Entry id is required' }, { status: 400 });
+    }
+
+    const entry = await prisma.weightEntry.findFirst({
+      where: { id, familyProfileId: activeProfile.id },
+    });
+
+    if (!entry) {
+      return NextResponse.json({ error: 'Weight entry not found' }, { status: 404 });
+    }
+
+    await prisma.weightEntry.delete({ where: { id } });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Weight DELETE error:', error);
+    return NextResponse.json({ error: 'Internal server error occurred' }, { status: 500 });
   }
 }
 

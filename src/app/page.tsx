@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ShieldAlert, Heart, Activity, ClipboardList, Share2, HelpCircle } from 'lucide-react';
+import { ShieldAlert, Heart, Activity, ClipboardList, Share2 } from 'lucide-react';
 import { Button } from '@/src/components/ui/primitives';
 
 export default function LandingPage() {

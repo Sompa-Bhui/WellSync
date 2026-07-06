@@ -138,8 +138,6 @@ async function main() {
   // 7. Seed 30 Days of History (June 6 to July 6, 2026)
   const now = new Date('2026-07-06T12:00:00Z');
   const baseWeight = 74.5;
-  const targetWeight = 68.0;
-
   for (let i = 30; i >= 0; i--) {
     const currentDate = new Date(now);
     currentDate.setDate(now.getDate() - i);
@@ -190,7 +188,6 @@ async function main() {
     });
 
     // Hydration entries: 1.5L to 2.8L
-    const targetWater = isWeekend ? 1800 : 2500;
     const drinkTimes = ['08:30', '11:00', '13:30', '16:00', '19:30', '21:00'];
     const totalDoses = isWeekend ? 4 : 6;
 
@@ -209,8 +206,6 @@ async function main() {
 
     // Nutrition Meal Entries
     // We vary weekend calories higher
-    const targetCalories = isWeekend ? 2100 : 1800;
-    
     // Breakfast: 8:00 AM
     await prisma.mealEntry.create({
       data: {

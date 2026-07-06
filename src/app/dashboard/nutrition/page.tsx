@@ -1,31 +1,22 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import DashboardShell from '@/src/components/DashboardShell';
-import { Card, Button, Input, Select, Textarea } from '@/src/components/ui/primitives';
-import {
-  Apple,
-  Search,
-  Plus,
-  Trash2,
-  AlertTriangle,
-  Info,
-  Calendar,
-  Layers,
-  Check
-} from 'lucide-react';
+import { Card, Button, Input, Select } from '@/src/components/ui/primitives';
+import { Apple, Search, Trash2, AlertTriangle, Layers } from 'lucide-react';
 import { useAuth } from '@/src/context/AuthContext';
 
 export default function NutritionPage() {
   const { activeProfile } = useAuth();
   
   // State
-  const [meals, setMeals] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  type Meal = { id: string; mealType: string; foodName: string; quantity: number; unit: string; calories: number; protein: number; carbs: number; fats: number; fiber: number; sugar: number; sodium: number };
+  type Food = { foodName: string; quantity: number; unit: string; calories: number; protein: number; carbs: number; fats: number; fiber: number; sugar: number; sodium: number };
+  type Recipe = { name: string; diet: string; instructions: string; matchedIngredients: string[]; missingIngredients: string[]; calories: number; protein: number; carbs: number; fats: number; fiber: number; sugar: number; sodium: number };
+  const [meals, setMeals] = useState<Meal[]>([]);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [allergyWarning, setAllergyWarning] = useState('');
+  const [searchResults, setSearchResults] = useState<Food[]>([]);
 
   // Form State
   const [foodName, setFoodName] = useState('');
@@ -43,11 +34,10 @@ export default function NutritionPage() {
 
   // Recipe Engine State
   const [recipeIngredients, setRecipeIngredients] = useState('');
-  const [recipes, setRecipes] = useState<any[]>([]);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [recipesLoading, setRecipesLoading] = useState(false);
 
-  const fetchMeals = async () => {
-    setLoading(true);
+  const fetchMeals = useCallback(async () => {
     try {
       const res = await fetch(`/api/meals?date=${date}`);
       if (res.ok) {
@@ -56,22 +46,23 @@ export default function NutritionPage() {
       }
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [date]);
 
   useEffect(() => {
-    fetchMeals();
-  }, [date, activeProfile]);
+    const timer = setTimeout(() => {
+      void fetchMeals();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchMeals, activeProfile]);
 
   // Handle food search autocomplete
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      return;
-    }
     const delayDebounce = setTimeout(async () => {
+      if (!searchQuery.trim()) {
+        setSearchResults([]);
+        return;
+      }
       try {
         const res = await fetch(`/api/meals/search?q=${searchQuery}`);
         if (res.ok) {
@@ -87,27 +78,14 @@ export default function NutritionPage() {
   }, [searchQuery]);
 
   // Check allergy dynamically in front-end
-  useEffect(() => {
-    if (!foodName) {
-      setAllergyWarning('');
-      return;
-    }
-    const profileAllergies = activeProfile.allergies
-      ? activeProfile.allergies.split(',').map((s: string) => s.trim().toLowerCase())
-      : [];
-    
-    const matched = profileAllergies.find((allergy: string) =>
-      allergy && foodName.toLowerCase().includes(allergy)
-    );
-    
-    if (matched) {
-      setAllergyWarning(`Warning: "${foodName}" contains peanut/penicillin related term matching allergy: "${matched}"`);
-    } else {
-      setAllergyWarning('');
-    }
+  const allergyWarning = React.useMemo(() => {
+    if (!foodName || !activeProfile?.allergies) return '';
+    const profileAllergies = activeProfile.allergies.split(',').map((s: string) => s.trim().toLowerCase());
+    const matched = profileAllergies.find((allergy: string) => allergy && foodName.toLowerCase().includes(allergy));
+    return matched ? `Warning: "${foodName}" matches configured allergy: "${matched}"` : '';
   }, [foodName, activeProfile]);
 
-  const handleSelectFood = (food: any) => {
+  const handleSelectFood = (food: Food) => {
     setFoodName(food.foodName);
     setQuantity(food.quantity.toString());
     setUnit(food.unit);
@@ -196,7 +174,7 @@ export default function NutritionPage() {
     }
   };
 
-  const handleLogRecipeDirect = async (recipe: any) => {
+  const handleLogRecipeDirect = async (recipe: Recipe) => {
     try {
       const res = await fetch('/api/meals', {
         method: 'POST',

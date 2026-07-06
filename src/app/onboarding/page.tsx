@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldAlert, Heart, Calendar, Target, Plus, Check } from 'lucide-react';
-import { Card, Input, Select, Button, Textarea } from '@/src/components/ui/primitives';
+import { ShieldAlert, Check } from 'lucide-react';
+import { Card, Input, Select, Button } from '@/src/components/ui/primitives';
 
 export default function OnboardingPage() {
   const router = useRouter();

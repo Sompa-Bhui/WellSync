@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/src/lib/db';
 import { getSessionUser, getActiveProfile } from '@/src/lib/auth';
+import type { MealEntry, WaterEntry, WorkoutEntry, MedicationEvent } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
   try {
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
     });
 
     const nutritionSummary = meals.reduce(
-      (acc, meal) => {
+      (acc, meal: MealEntry) => {
         acc.calories += meal.calories;
         acc.protein += meal.protein;
         acc.carbs += meal.carbs;
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const totalWater = waterEntries.reduce((sum, entry) => sum + entry.amount, 0);
+    const totalWater = waterEntries.reduce((sum: number, entry: WaterEntry) => sum + entry.amount, 0);
 
     // 3. Fetch Sleep (for the dateStr)
     const sleep = await prisma.sleepEntry.findFirst({
@@ -75,8 +76,8 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const totalSteps = workouts.reduce((sum, w) => sum + (w.steps || 0), 0);
-    const totalWorkoutDuration = workouts.reduce((sum, w) => sum + w.durationMinutes, 0);
+    const totalSteps = workouts.reduce((sum: number, w: WorkoutEntry) => sum + (w.steps || 0), 0);
+    const totalWorkoutDuration = workouts.reduce((sum: number, w: WorkoutEntry) => sum + w.durationMinutes, 0);
 
     // 6. Fetch Today's Medications Adherence
     const medicationEvents = await prisma.medicationEvent.findMany({
@@ -93,7 +94,7 @@ export async function GET(req: NextRequest) {
     });
 
     const totalDoses = medicationEvents.length;
-    const completedDoses = medicationEvents.filter(e => e.status === 'TAKEN').length;
+    const completedDoses = medicationEvents.filter((e: MedicationEvent) => e.status === 'TAKEN').length;
 
     // 7. Fetch Next Upcoming Appointment
     const nextAppointment = await prisma.appointment.findFirst({
@@ -127,7 +128,7 @@ export async function GET(req: NextRequest) {
       }
 
       // Medication Check
-      const pendingDoses = medicationEvents.filter(e => e.status === 'PENDING').length;
+      const pendingDoses = medicationEvents.filter((e: MedicationEvent) => e.status === 'PENDING').length;
       if (pendingDoses > 0) {
         alerts.push(`You have ${pendingDoses} scheduled medication dose${pendingDoses > 1 ? 's' : ''} pending completion.`);
       }

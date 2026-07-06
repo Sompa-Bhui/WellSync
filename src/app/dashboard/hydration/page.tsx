@@ -1,19 +1,19 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import DashboardShell from '@/src/components/DashboardShell';
 import { Card, Button, Input } from '@/src/components/ui/primitives';
-import { Droplet, Plus, Trash2, Calendar, Coffee, Sparkles } from 'lucide-react';
+import { Droplet, Coffee, Sparkles } from 'lucide-react';
+
+type WaterEntry = { id: string; amount: number; timestamp: string; beverageType: string };
 
 export default function HydrationPage() {
-  const [entries, setEntries] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [entries, setEntries] = useState<WaterEntry[]>([]);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [customAmount, setCustomAmount] = useState('');
   const [formLoading, setFormLoading] = useState(false);
 
-  const fetchWater = async () => {
-    setLoading(true);
+  const fetchWater = useCallback(async () => {
     try {
       const res = await fetch(`/api/water?date=${date}`);
       if (res.ok) {
@@ -22,14 +22,15 @@ export default function HydrationPage() {
       }
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [date]);
 
   useEffect(() => {
-    fetchWater();
-  }, [date]);
+    const timer = setTimeout(() => {
+      void fetchWater();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchWater]);
 
   const handleQuickAdd = async (amount: number) => {
     try {

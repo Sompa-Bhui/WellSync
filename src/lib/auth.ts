@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import jwt, { type JwtPayload } from 'jsonwebtoken';
 import { cookies } from 'next/headers';
 import { prisma } from './db';
 
@@ -19,7 +19,7 @@ export function signToken(payload: { userId: string; email: string; name: string
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
 }
 
-export function verifyToken(token: string): any {
+export function verifyToken(token: string): JwtPayload | string | null {
   try {
     return jwt.verify(token, JWT_SECRET);
   } catch {
@@ -34,7 +34,7 @@ export async function getSessionUser() {
     if (!token) return null;
 
     const payload = verifyToken(token);
-    if (!payload || !payload.userId) return null;
+    if (!payload || typeof payload === 'string' || !('userId' in payload)) return null;
 
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
