@@ -116,6 +116,12 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    const timelineEvents = await prisma.timelineEvent.findMany({
+      where: { familyProfileId: activeProfile.id },
+      orderBy: { timestamp: 'desc' },
+      take: 8,
+    });
+
     // 8. Generate Alerts / Attention List (Explainable Insights)
     const alerts: string[] = [];
     const healthProfile = user.healthProfile;
@@ -186,6 +192,7 @@ export async function GET(req: NextRequest) {
         time: nextAppointment.time,
         status: nextAppointment.status,
       } : null,
+      timelineEvents,
       alerts,
     });
   } catch (error) {

@@ -1,6 +1,6 @@
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -8,54 +8,54 @@ generator client {
 }
 
 model User {
-  id           String             @id @default(uuid())
-  email        String             @unique
-  password     String
-  name         String
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  
-  healthProfile HealthProfile?
-  familyProfiles FamilyProfile[]
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  healthProfile     HealthProfile?
+  familyProfiles    FamilyProfile[]
   careCircleMembers CareCircleMember[]
-  auditLogs     AuditLog[]
-  notifications Notification[]
+  auditLogs         AuditLog[]
+  notifications     Notification[]
 }
 
 model HealthProfile {
-  id                String   @id @default(uuid())
-  userId            String   @unique
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   dateOfBirth       String?
-  height            Float?   // in cm
-  targetWeight      Float?   // in kg
-  activityLevel     String?  // SEDENTARY, LIGHTLY_ACTIVE, MODERATELY_ACTIVE, VERY_ACTIVE
-  dietaryPreference String?  // VEGETARIAN, VEGAN, EGGETARIAN, OMNIVORE, CUSTOM
-  allergies         String?  // comma-separated or JSON
-  foodRestrictions  String?  // comma-separated or JSON
-  healthGoals       String?  // comma-separated
-  sleepWakeTime     String?  // "07:00"
-  sleepBedTime      String?  // "22:30"
-  preferredUnits    String?  // "METRIC" or "IMPERIAL"
+  height            Float? // in cm
+  targetWeight      Float? // in kg
+  activityLevel     String? // SEDENTARY, LIGHTLY_ACTIVE, MODERATELY_ACTIVE, VERY_ACTIVE
+  dietaryPreference String? // VEGETARIAN, VEGAN, EGGETARIAN, OMNIVORE, CUSTOM
+  allergies         String? // comma-separated or JSON
+  foodRestrictions  String? // comma-separated or JSON
+  healthGoals       String? // comma-separated
+  sleepWakeTime     String? // "07:00"
+  sleepBedTime      String? // "22:30"
+  preferredUnits    String? // "METRIC" or "IMPERIAL"
   timezone          String   @default("UTC")
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }
 
 model FamilyProfile {
-  id           String   @id @default(uuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  name         String   // e.g., "Self", "Sarah (Daughter)", "John (Father)"
-  relationship String   // SELF, CHILD, PARENT, SPOUSE, DEPENDENT, OTHER
-  avatarUrl    String?
-  allergies    String?  // comma-separated
-  foodRestrictions String?
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name              String // e.g., "Self", "Sarah (Daughter)", "John (Father)"
+  relationship      String // SELF, CHILD, PARENT, SPOUSE, DEPENDENT, OTHER
+  avatarUrl         String?
+  allergies         String? // comma-separated
+  foodRestrictions  String?
   dietaryPreference String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   mealEntries      MealEntry[]
   waterEntries     WaterEntry[]
@@ -65,8 +65,9 @@ model FamilyProfile {
   medications      Medication[]
   medicationEvents MedicationEvent[]
   appointments     Appointment[]
-  medicalRecords   MedicalRecord[]
+  followUpTasks    FollowUpTask[]
   timelineEvents   TimelineEvent[]
+  medicalRecords   MedicalRecord[]
   emergencyProfile EmergencyProfile?
 }
 
@@ -74,20 +75,20 @@ model MealEntry {
   id              String        @id @default(uuid())
   familyProfileId String
   familyProfile   FamilyProfile @relation(fields: [familyProfileId], references: [id], onDelete: Cascade)
-  
-  foodName        String
-  quantity        Float
-  unit            String        // g, ml, cup, piece, oz
-  mealType        String        // BREAKFAST, LUNCH, DINNER, SNACK, CUSTOM
-  calories        Float         // kcal
-  protein         Float         // grams
-  carbs           Float         // grams
-  fats            Float         // grams
-  fiber           Float         @default(0) // grams
-  sugar           Float         @default(0) // grams
-  sodium          Float         @default(0) // mg
-  timestamp       DateTime      @default(now())
-  createdAt       DateTime      @default(now())
+
+  foodName  String
+  quantity  Float
+  unit      String // g, ml, cup, piece, oz
+  mealType  String // BREAKFAST, LUNCH, DINNER, SNACK, CUSTOM
+  calories  Float // kcal
+  protein   Float // grams
+  carbs     Float // grams
+  fats      Float // grams
+  fiber     Float    @default(0) // grams
+  sugar     Float    @default(0) // grams
+  sodium    Float    @default(0) // mg
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([familyProfileId, timestamp])
 }
@@ -96,11 +97,11 @@ model WaterEntry {
   id              String        @id @default(uuid())
   familyProfileId String
   familyProfile   FamilyProfile @relation(fields: [familyProfileId], references: [id], onDelete: Cascade)
-  
-  amount          Float         // ml
-  beverageType    String        @default("Water")
-  timestamp       DateTime      @default(now())
-  createdAt       DateTime      @default(now())
+
+  amount       Float // ml
+  beverageType String   @default("Water")
+  timestamp    DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   @@index([familyProfileId, timestamp])
 }
@@ -109,14 +110,14 @@ model SleepEntry {
   id              String        @id @default(uuid())
   familyProfileId String
   familyProfile   FamilyProfile @relation(fields: [familyProfileId], references: [id], onDelete: Cascade)
-  
-  date            String        // YYYY-MM-DD
+
+  date            String // YYYY-MM-DD
   bedtime         DateTime
   wakeTime        DateTime
   durationMinutes Int
-  qualityRating   Int?          // 1 to 5
-  interruptions   String?       // notes about wakeups
-  createdAt       DateTime      @default(now())
+  qualityRating   Int? // 1 to 5
+  interruptions   String? // notes about wakeups
+  createdAt       DateTime @default(now())
 
   @@unique([familyProfileId, date])
   @@index([familyProfileId, bedtime])
@@ -126,12 +127,12 @@ model WeightEntry {
   id              String        @id @default(uuid())
   familyProfileId String
   familyProfile   FamilyProfile @relation(fields: [familyProfileId], references: [id], onDelete: Cascade)
-  
-  weight          Float         // kg
-  date            String        // YYYY-MM-DD
-  notes           String?
-  timestamp       DateTime      @default(now())
-  createdAt       DateTime      @default(now())
+
+  weight    Float // kg
+  date      String // YYYY-MM-DD
+  notes     String?
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([familyProfileId, date])
   @@index([familyProfileId, timestamp])
@@ -141,15 +142,15 @@ model WorkoutEntry {
   id              String        @id @default(uuid())
   familyProfileId String
   familyProfile   FamilyProfile @relation(fields: [familyProfileId], references: [id], onDelete: Cascade)
-  
-  type            String        // WALKING, RUNNING, CYCLING, STRENGTH, YOGA, CUSTOM
+
+  type            String // WALKING, RUNNING, CYCLING, STRENGTH, YOGA, CUSTOM
   durationMinutes Int
-  distance        Float?        // km (optional)
-  steps           Int?          // (optional)
+  distance        Float? // km (optional)
+  steps           Int? // (optional)
   notes           String?
-  date            String        // YYYY-MM-DD
-  timestamp       DateTime      @default(now())
-  createdAt       DateTime      @default(now())
+  date            String // YYYY-MM-DD
+  timestamp       DateTime @default(now())
+  createdAt       DateTime @default(now())
 
   @@index([familyProfileId, timestamp])
 }
@@ -158,20 +159,20 @@ model Medication {
   id              String        @id @default(uuid())
   familyProfileId String
   familyProfile   FamilyProfile @relation(fields: [familyProfileId], references: [id], onDelete: Cascade)
-  
+
   name            String
-  dosage          String        // e.g. "500mg", "1 pill", "2 drops"
-  unit            String        @default("mg")
-  frequency       String        // DAILY, TWICE_DAILY, WEEKLY, AS_NEEDED
-  scheduleTimes   String        // Comma-separated times, e.g. "08:00,20:00"
-  instructions    String?       // e.g. "Take after food"
-  startDate       String        // YYYY-MM-DD
-  endDate         String?       // YYYY-MM-DD
-  refillDate      String?       // YYYY-MM-DD
-  reminderEnabled Boolean       @default(true)
-  active          Boolean       @default(true)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  dosage          String // e.g. "500mg", "1 pill", "2 drops"
+  unit            String   @default("mg")
+  frequency       String // DAILY, TWICE_DAILY, WEEKLY, AS_NEEDED
+  scheduleTimes   String // Comma-separated times, e.g. "08:00,20:00"
+  instructions    String? // e.g. "Take after food"
+  startDate       String // YYYY-MM-DD
+  endDate         String? // YYYY-MM-DD
+  refillDate      String? // YYYY-MM-DD
+  reminderEnabled Boolean  @default(true)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   medicationEvents MedicationEvent[]
 }
@@ -180,26 +181,26 @@ model MedicationEvent {
   id              String        @id @default(uuid())
   familyProfileId String
   familyProfile   FamilyProfile @relation(fields: [familyProfileId], references: [id], onDelete: Cascade)
-  
-  medicationId    String
-  medication      Medication    @relation(fields: [medicationId], references: [id], onDelete: Cascade)
-  
-  scheduledTime   DateTime
-  status          String        // TAKEN, SKIPPED, MISSED, PENDING
-  timestamp       DateTime?     // When it was actually recorded
-  createdAt       DateTime      @default(now())
+
+  medicationId String
+  medication   Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+
+  scheduledTime DateTime
+  status        String // TAKEN, SKIPPED, MISSED, PENDING
+  timestamp     DateTime? // When it was actually recorded
+  createdAt     DateTime  @default(now())
 
   @@index([familyProfileId, scheduledTime])
 }
 
 model Doctor {
-  id          String        @id @default(uuid())
+  id          String   @id @default(uuid())
   name        String
   specialty   String
   clinic      String
   contactInfo String?
-  createdAt   DateTime      @default(now())
-  
+  createdAt   DateTime @default(now())
+
   appointments Appointment[]
 }
 
@@ -207,40 +208,66 @@ model Appointment {
   id              String        @id @default(uuid())
   familyProfileId String
   familyProfile   FamilyProfile @relation(fields: [familyProfileId], references: [id], onDelete: Cascade)
-  
-  doctorId        String
-  doctor          Doctor        @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  
-  date            String        // YYYY-MM-DD
-  time            String        // HH:MM
-  isVirtual       Boolean       @default(false)
-  status          String        // PENDING, CONFIRMED, COMPLETED, CANCELLED, RESCHEDULED, MISSED
+
+  doctorId String
+  doctor   Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  date            String // YYYY-MM-DD
+  time            String // HH:MM
+  isVirtual       Boolean  @default(false)
+  status          String // PENDING, CONFIRMED, COMPLETED, CANCELLED, RESCHEDULED, MISSED
   reason          String?
   notes           String?
-  preparationList String?       // Comma-separated or JSON list of tasks
-  followUpDate    String?       // YYYY-MM-DD
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  preparationList String? // Comma-separated or JSON list of tasks
+  followUpDate    String? // YYYY-MM-DD
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  medicalRecords  MedicalRecord[]
+  medicalRecords        MedicalRecord[]
+  followUpTasks         FollowUpTask[]  @relation("FollowUpSourceAppointment")
+  followUpScheduledFrom FollowUpTask[]  @relation("FollowUpScheduledAppointment")
+}
+
+model FollowUpTask {
+  id              String        @id @default(uuid())
+  familyProfileId String
+  familyProfile   FamilyProfile @relation(fields: [familyProfileId], references: [id], onDelete: Cascade)
+
+  appointmentId String
+  appointment   Appointment @relation("FollowUpSourceAppointment", fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  scheduledAppointmentId String?
+  scheduledAppointment   Appointment? @relation("FollowUpScheduledAppointment", fields: [scheduledAppointmentId], references: [id], onDelete: SetNull)
+
+  title       String
+  details     String?
+  dueDate     String
+  status      String // pending, scheduled, completed, dismissed
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([familyProfileId, dueDate])
+  @@index([appointmentId, status])
 }
 
 model MedicalRecord {
   id              String        @id @default(uuid())
   familyProfileId String
   familyProfile   FamilyProfile @relation(fields: [familyProfileId], references: [id], onDelete: Cascade)
-  
-  appointmentId   String?
-  appointment     Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
-  
-  title           String
-  category        String        // PRESCRIPTION, LAB_REPORT, IMAGING, DISCHARGE_SUMMARY, VACCINATION, OTHER
-  provider        String
-  date            String        // YYYY-MM-DD
-  fileUrl         String        // Safe local simulation or signed link
-  tags            String?       // Comma-separated tags
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+
+  appointmentId String?
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  title     String
+  category  String // PRESCRIPTION, LAB_REPORT, IMAGING, DISCHARGE_SUMMARY, VACCINATION, OTHER
+  provider  String
+  date      String // YYYY-MM-DD
+  fileUrl   String // Safe local simulation or signed link
+  notes     String?
+  tags      String? // Comma-separated tags
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([familyProfileId, date])
 }
@@ -249,29 +276,29 @@ model TimelineEvent {
   id              String        @id @default(uuid())
   familyProfileId String
   familyProfile   FamilyProfile @relation(fields: [familyProfileId], references: [id], onDelete: Cascade)
-  
-  eventType       String        // SYMPTOM, APPOINTMENT, PRESCRIPTION, LAB_REPORT, MEDICATION_CHANGE, WEIGHT, VITAL_ALERT
-  eventId         String?       // Optional direct link to target ID (e.g. Appointment ID)
-  title           String
-  description     String
-  timestamp       DateTime      @default(now())
-  createdAt       DateTime      @default(now())
+
+  eventType   String // SYMPTOM, APPOINTMENT, PRESCRIPTION, LAB_REPORT, MEDICATION_CHANGE, WEIGHT, VITAL_ALERT
+  eventId     String? // Optional direct link to target ID (e.g. Appointment ID)
+  title       String
+  description String
+  timestamp   DateTime @default(now())
+  createdAt   DateTime @default(now())
 
   @@index([familyProfileId, timestamp])
 }
 
 model CareCircleMember {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  email           String
-  role            String    // FAMILY_ADMIN, CAREGIVER, CLINICIAN_VIEWER, LIMITED_VIEWER
-  permissions     String    // JSON permissions, e.g. {"appointments": "read", "medications": "write", "vitals": "read"}
-  expiryDate      DateTime?
-  active          Boolean   @default(true)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  email       String
+  role        String // FAMILY_ADMIN, CAREGIVER, CLINICIAN_VIEWER, LIMITED_VIEWER
+  permissions String // JSON permissions, e.g. {"appointments": "read", "medications": "write", "vitals": "read"}
+  expiryDate  DateTime?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@unique([userId, email])
 }
@@ -280,41 +307,41 @@ model EmergencyProfile {
   id              String        @id @default(uuid())
   familyProfileId String        @unique
   familyProfile   FamilyProfile @relation(fields: [familyProfileId], references: [id], onDelete: Cascade)
-  
-  bloodGroup      String?
-  emergencyContact String?
+
+  bloodGroup        String?
+  emergencyContact  String?
   criticalAllergies String?
-  conditions      String?
-  medications     String?
-  emergencyNotes  String?
-  token           String        @unique // unique secure token for QR access
-  active          Boolean       @default(true)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  conditions        String?
+  medications       String?
+  emergencyNotes    String?
+  token             String   @unique // unique secure token for QR access
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model Notification {
-  id              String   @id @default(uuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  title           String
-  message         String
-  category        String   // APPOINTMENT, HYDRATION, MEDICATION, RECORD, ACCESS, ALERT
-  isRead          Boolean  @default(false)
-  timestamp       DateTime @default(now())
-  createdAt       DateTime @default(now())
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title     String
+  message   String
+  category  String // APPOINTMENT, HYDRATION, MEDICATION, RECORD, ACCESS, ALERT
+  isRead    Boolean  @default(false)
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([userId, isRead])
 }
 
 model AuditLog {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  action    String   // e.g. VIEW_RECORD, DELETE_RECORD, EMERGENCY_ACCESS
-  target    String   // e.g. "MedicalRecord id: xxxx"
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  action    String // e.g. VIEW_RECORD, DELETE_RECORD, EMERGENCY_ACCESS
+  target    String // e.g. "MedicalRecord id: xxxx"
   ipAddress String?
   timestamp DateTime @default(now())
 

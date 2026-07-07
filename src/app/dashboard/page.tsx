@@ -16,7 +16,8 @@ import {
   ArrowRight,
   TrendingDown,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Clock
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -29,6 +30,7 @@ export default function DashboardPage() {
     vitals: { currentWeight: number | null; targetWeight: number | null };
     medications: { completed: number; total: number; events: Array<{ id: string; scheduledTime: string; status: string; medication: { name: string; dosage: string } }> };
     nextAppointment: { id: string; doctorName: string; specialty: string; clinic: string; date: string; time: string; status: string } | null;
+    timelineEvents: Array<{ id: string; eventType: string; eventId: string | null; title: string; description: string; timestamp: string }>;
   };
   const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -325,6 +327,32 @@ export default function DashboardPage() {
                   Appointments Center
                 </Button>
               </Link>
+            </div>
+          </Card>
+
+          <Card className="flex flex-col justify-between">
+            <div>
+              <div className="flex items-center space-x-2 pb-4 border-b border-border/40 mb-4">
+                <Clock className="w-5 h-5 text-primary" />
+                <h3 className="text-base font-bold text-foreground">Recent Timeline</h3>
+              </div>
+              <div className="space-y-3">
+                {data.timelineEvents.length > 0 ? (
+                  data.timelineEvents.slice(0, 5).map((event) => (
+                    <div key={event.id} className="rounded-lg border border-border/60 bg-background p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-foreground">{event.title}</p>
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{event.eventType}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">{event.description}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-10 text-sm text-muted-foreground italic">
+                    No timeline activity yet
+                  </div>
+                )}
+              </div>
             </div>
           </Card>
         </div>
