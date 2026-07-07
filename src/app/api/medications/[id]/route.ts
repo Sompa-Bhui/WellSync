@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/src/lib/db';
 import { getActiveProfile, getSessionUser } from '@/src/lib/auth';
 import { MEDICATION_FREQUENCIES, parseScheduleTimes } from '@/src/lib/medications';
+import { resolveActiveProfileAccess, canUsePermission } from '@/src/lib/authorization';
 
 function parseBool(value: unknown) {
   return value === true || value === 'true';
@@ -37,6 +38,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
     const { id } = await params;
     const activeProfile = await getActiveProfile(user.id);
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!canUsePermission(access, 'medications.view')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const medication = await prisma.medication.findFirst({
       where: { id, familyProfileId: activeProfile.id },
       include: {
@@ -58,6 +61,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { id } = await params;
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!access || access.accessType !== 'owner') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const activeProfile = await getActiveProfile(user.id);
     const existing = await prisma.medication.findFirst({ where: { id, familyProfileId: activeProfile.id } });
     if (!existing) return NextResponse.json({ error: 'Medication not found' }, { status: 404 });
@@ -97,6 +102,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { id } = await params;
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!access || access.accessType !== 'owner') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const activeProfile = await getActiveProfile(user.id);
     const medication = await prisma.medication.findFirst({ where: { id, familyProfileId: activeProfile.id } });
     if (!medication) return NextResponse.json({ error: 'Medication not found' }, { status: 404 });

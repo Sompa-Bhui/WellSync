@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:auth": "tsx --test src/test/auth-api.test.ts src/lib/permissions.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

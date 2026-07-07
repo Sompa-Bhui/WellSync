@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/src/lib/db';
 import { getSessionUser, getActiveProfile } from '@/src/lib/auth';
+import { resolveProfileAccess, canUsePermission } from '@/src/lib/authorization';
 import type { MealEntry, WaterEntry, WorkoutEntry, MedicationEvent } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
@@ -11,6 +12,10 @@ export async function GET(req: NextRequest) {
     }
 
     const activeProfile = await getActiveProfile(user.id);
+    const access = await resolveProfileAccess(user.id, activeProfile.id);
+    if (!canUsePermission(access, 'dashboard.summary.view')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     // Get current date string in user local timezone (simulated here as UTC or parameterized)
     const url = new URL(req.url);

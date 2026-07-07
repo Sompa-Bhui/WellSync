@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/src/lib/db';
 import { getSessionUser, getActiveProfile } from '@/src/lib/auth';
+import { resolveActiveProfileAccess, canUsePermission } from '@/src/lib/authorization';
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,6 +11,8 @@ export async function GET(req: NextRequest) {
     }
 
     const activeProfile = await getActiveProfile(user.id);
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!canUsePermission(access, 'nutrition.view')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const url = new URL(req.url);
     const dateStr = url.searchParams.get('date') || new Date().toISOString().split('T')[0];
 
@@ -41,6 +44,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!access || access.accessType !== 'owner') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const activeProfile = await getActiveProfile(user.id);
     const body = await req.json();
 

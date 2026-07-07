@@ -3,6 +3,7 @@ import { prisma } from '@/src/lib/db';
 import { getSessionUser, getActiveProfile } from '@/src/lib/auth';
 import { ensureAppointmentOwnership } from '@/src/lib/appointments';
 import { RECORD_CATEGORIES, serializeTags, recordTimelineEvent } from '@/src/lib/records';
+import { resolveActiveProfileAccess, canUsePermission } from '@/src/lib/authorization';
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,6 +11,8 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const activeProfile = await getActiveProfile(user.id);
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!canUsePermission(access, 'records.view')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const url = new URL(req.url);
     const q = (url.searchParams.get('q') || '').toLowerCase();
     const category = url.searchParams.get('category');
@@ -48,6 +51,8 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const activeProfile = await getActiveProfile(user.id);
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!canUsePermission(access, 'records.add')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const body = await req.json();
     if (!body.title || !body.category || !body.date || !body.provider) {
       return NextResponse.json({ error: 'title, category, date, and provider are required' }, { status: 400 });

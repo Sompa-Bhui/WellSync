@@ -6,6 +6,17 @@ import { prisma } from './db';
 const JWT_SECRET = process.env.JWT_SECRET || 'wellsync-development-secret-key-987654321';
 const COOKIE_NAME = 'wellsync_session';
 const ACTIVE_PROFILE_COOKIE = 'wellsync_active_profile_id';
+type CookieStore = Awaited<ReturnType<typeof cookies>>;
+let cookieStoreOverride: (() => Promise<CookieStore> | CookieStore) | null = null;
+
+export function __setCookieStoreForTests(factory: (() => Promise<CookieStore> | CookieStore) | null) {
+  cookieStoreOverride = factory;
+}
+
+async function getCookieStore() {
+  if (cookieStoreOverride) return await cookieStoreOverride();
+  return await cookies();
+}
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 10);
@@ -29,7 +40,7 @@ export function verifyToken(token: string): JwtPayload | string | null {
 
 export async function getSessionUser() {
   try {
-    const cookieStore = await cookies();
+    const cookieStore = await getCookieStore();
     const token = cookieStore.get(COOKIE_NAME)?.value;
     if (!token) return null;
 
@@ -55,7 +66,7 @@ export async function getSessionUser() {
 }
 
 export async function setSession(token: string) {
-  const cookieStore = await cookies();
+  const cookieStore = await getCookieStore();
   cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -66,23 +77,38 @@ export async function setSession(token: string) {
 }
 
 export async function clearSession() {
-  const cookieStore = await cookies();
+  const cookieStore = await getCookieStore();
   cookieStore.delete(COOKIE_NAME);
   cookieStore.delete(ACTIVE_PROFILE_COOKIE);
 }
 
+export async function __readCookieValue(name: string) {
+  const cookieStore = await getCookieStore();
+  return cookieStore.get(name)?.value ?? null;
+}
+
 export async function getActiveProfile(userId: string) {
-  const cookieStore = await cookies();
+  const cookieStore = await getCookieStore();
   const activeProfileId = cookieStore.get(ACTIVE_PROFILE_COOKIE)?.value;
 
   if (activeProfileId) {
-    const profile = await prisma.familyProfile.findFirst({
+    const ownedProfile = await prisma.familyProfile.findFirst({
+      where: { id: activeProfileId, userId },
+    });
+    if (ownedProfile) return ownedProfile;
+
+    const sharedProfile = await prisma.familyProfile.findFirst({
       where: {
         id: activeProfileId,
-        userId: userId,
+        careCircleMembers: {
+          some: {
+            userId,
+            active: true,
+          },
+        },
       },
     });
-    if (profile) return profile;
+    if (sharedProfile) return sharedProfile;
   }
 
   // Fallback to "Self" profile or first profile
@@ -118,7 +144,28 @@ export async function getActiveProfile(userId: string) {
 }
 
 export async function setActiveProfile(profileId: string) {
-  const cookieStore = await cookies();
+  const cookieStore = await getCookieStore();
+  const user = await getSessionUser();
+  if (user) {
+    const owned = await prisma.familyProfile.findFirst({ where: { id: profileId, userId: user.id } });
+    if (owned) {
+      cookieStore.set(ACTIVE_PROFILE_COOKIE, profileId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 30, // 30 days
+        path: '/',
+      });
+      return;
+    }
+
+    const shared = await prisma.careCircleMember.findFirst({
+      where: { familyProfileId: profileId, userId: user.id, active: true },
+    });
+    if (!shared) {
+      return;
+    }
+  }
   cookieStore.set(ACTIVE_PROFILE_COOKIE, profileId, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

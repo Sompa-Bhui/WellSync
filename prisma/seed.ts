@@ -484,7 +484,9 @@ async function main() {
   await prisma.careCircleMember.create({
     data: {
       userId: user.id,
+      familyProfileId: selfProfile.id,
       email: 'caregiver@wellsync.com',
+      relationshipLabel: 'Trusted caregiver',
       role: 'CAREGIVER',
       permissions: JSON.stringify({
         appointments: 'read',
@@ -499,7 +501,9 @@ async function main() {
   await prisma.careCircleMember.create({
     data: {
       userId: user.id,
+      familyProfileId: selfProfile.id,
       email: 'sharma@citycare.com',
+      relationshipLabel: 'Clinician viewer',
       role: 'CLINICIAN_VIEWER',
       permissions: JSON.stringify({
         appointments: 'read',
@@ -516,12 +520,12 @@ async function main() {
   await prisma.emergencyProfile.create({
     data: {
       familyProfileId: selfProfile.id,
-      bloodGroup: 'O_POSITIVE',
-      emergencyContact: 'Emma Watson (Spouse) - +1-555-0911',
-      criticalAllergies: 'Peanuts, Penicillin (severe)',
-      conditions: 'Mild chronic blood pressure variance',
-      medications: 'None daily (except over-the-counter Multivitamins)',
-      emergencyNotes: 'Carries peanut allergen auto-injector (EpiPen) in backpack.',
+      bloodType: 'O+',
+      allergies: 'Peanuts, Penicillin (severe)',
+      criticalConditions: 'Mild chronic blood pressure variance',
+      currentMedications: 'None daily (except over-the-counter Multivitamins)',
+      emergencyNote: 'Carries peanut allergen auto-injector (EpiPen) in backpack.',
+      publicFields: JSON.stringify(['preferredName', 'bloodType', 'allergies', 'criticalConditions', 'currentMedications', 'primaryDoctor', 'insuranceNote', 'emergencyNote']),
       token: emergencyToken,
       active: true,
     },

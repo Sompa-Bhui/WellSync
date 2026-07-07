@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/src/lib/db';
 import { getActiveProfile, getSessionUser } from '@/src/lib/auth';
+import { resolveActiveProfileAccess, canUsePermission } from '@/src/lib/authorization';
 
 function normalizeStatus(status: unknown) {
   const value = String(status || '').toUpperCase();
@@ -14,6 +15,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ev
 
     const { eventId } = await params;
     const activeProfile = await getActiveProfile(user.id);
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!canUsePermission(access, 'medications.manage_events')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const existing = await prisma.medicationEvent.findFirst({
       where: { id: eventId, familyProfileId: activeProfile.id },
     });

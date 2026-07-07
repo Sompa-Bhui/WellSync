@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/src/lib/db';
 import { getSessionUser, getActiveProfile } from '@/src/lib/auth';
 import { APPOINTMENT_STATUSES, serializeListField, createAppointmentTimelineEvent } from '@/src/lib/appointments';
+import { resolveActiveProfileAccess, canUsePermission } from '@/src/lib/authorization';
 
 function isValidTime(time: unknown) {
   return typeof time === 'string' && /^\d{2}:\d{2}$/.test(time);
@@ -13,6 +14,8 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const activeProfile = await getActiveProfile(user.id);
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!canUsePermission(access, 'appointments.view')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const url = new URL(req.url);
     const status = url.searchParams.get('status');
     const view = url.searchParams.get('view');
@@ -44,6 +47,8 @@ export async function POST(req: NextRequest) {
     const user = await getSessionUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!canUsePermission(access, 'appointments.manage')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const activeProfile = await getActiveProfile(user.id);
     const body = await req.json();
     const { doctorId, doctorName, specialty, clinic, contactInfo, date, time, isVirtual, status, reason, notes, preparationList, followUpDate } = body;

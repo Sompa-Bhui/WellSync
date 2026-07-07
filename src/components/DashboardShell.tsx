@@ -59,7 +59,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     { name: 'Appointments', href: '/dashboard/appointments', icon: Calendar },
     { name: 'Records Vault', href: '/dashboard/records', icon: FileText },
     { name: 'Connected Timeline', href: '/dashboard/timeline', icon: Clock },
-    { name: 'Care Circle', href: '/dashboard/family', icon: Users },
+    { name: 'Care Circle', href: '/dashboard/care-circle', icon: Users },
+    { name: 'Emergency Profile', href: '/dashboard/emergency', icon: ShieldAlert },
   ];
 
   const handleProfileSwitch = (id: string) => {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/src/lib/db';
 import { getActiveProfile, getSessionUser } from '@/src/lib/auth';
 import { ensureTodayMedicationEvents, MEDICATION_FREQUENCIES, parseScheduleTimes } from '@/src/lib/medications';
+import { resolveActiveProfileAccess, canUsePermission } from '@/src/lib/authorization';
 
 function parseBool(value: unknown) {
   return value === true || value === 'true';
@@ -24,6 +25,8 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const activeProfile = await getActiveProfile(user.id);
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!canUsePermission(access, 'medications.view')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const url = new URL(req.url);
     const active = url.searchParams.get('active');
     const includeEvents = url.searchParams.get('includeEvents') === '1';
@@ -51,6 +54,8 @@ export async function POST(req: NextRequest) {
     const user = await getSessionUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!access || access.accessType !== 'owner') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const activeProfile = await getActiveProfile(user.id);
     const body = await req.json();
     const errors = validateMedicationPayload(body);

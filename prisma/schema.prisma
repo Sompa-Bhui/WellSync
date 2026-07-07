@@ -15,11 +15,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  healthProfile     HealthProfile?
-  familyProfiles    FamilyProfile[]
-  careCircleMembers CareCircleMember[]
-  auditLogs         AuditLog[]
-  notifications     Notification[]
+  healthProfile         HealthProfile?
+  familyProfiles        FamilyProfile[]
+  careCircleInvitations CareCircleInvitation[] @relation("CareCircleInvitationUser")
+  careCircleMembers     CareCircleMember[]     @relation("CareCircleMemberUser")
+  auditLogs             AuditLog[]
+  notifications         Notification[]
 }
 
 model HealthProfile {
@@ -57,18 +58,23 @@ model FamilyProfile {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  mealEntries      MealEntry[]
-  waterEntries     WaterEntry[]
-  sleepEntries     SleepEntry[]
-  weightEntries    WeightEntry[]
-  workoutEntries   WorkoutEntry[]
-  medications      Medication[]
-  medicationEvents MedicationEvent[]
-  appointments     Appointment[]
-  followUpTasks    FollowUpTask[]
-  timelineEvents   TimelineEvent[]
-  medicalRecords   MedicalRecord[]
-  emergencyProfile EmergencyProfile?
+  mealEntries           MealEntry[]
+  waterEntries          WaterEntry[]
+  sleepEntries          SleepEntry[]
+  weightEntries         WeightEntry[]
+  workoutEntries        WorkoutEntry[]
+  medications           Medication[]
+  medicationEvents      MedicationEvent[]
+  appointments          Appointment[]
+  followUpTasks         FollowUpTask[]
+  timelineEvents        TimelineEvent[]
+  medicalRecords        MedicalRecord[]
+  careCircleInvitations CareCircleInvitation[] @relation("CareCircleInvitationFamilyProfile")
+  careCircleMembers     CareCircleMember[]     @relation("CareCircleMemberFamilyProfile")
+  emergencyProfile      EmergencyProfile?      @relation("EmergencyProfileFamilyProfile")
+  emergencyContacts     EmergencyContact[]     @relation("EmergencyContactFamilyProfile")
+  emergencyAccessLogs   EmergencyAccessLog[]   @relation("EmergencyAccessLogFamilyProfile")
+  caregiverHandoffs     CaregiverHandoff[]
 }
 
 model MealEntry {
@@ -287,37 +293,128 @@ model TimelineEvent {
   @@index([familyProfileId, timestamp])
 }
 
+model CareCircleInvitation {
+  id                String            @id @default(uuid())
+  userId            String
+  user              User              @relation("CareCircleInvitationUser", fields: [userId], references: [id], onDelete: Cascade)
+  familyProfileId   String
+  familyProfile     FamilyProfile     @relation("CareCircleInvitationFamilyProfile", fields: [familyProfileId], references: [id], onDelete: Cascade)
+  email             String
+  relationshipLabel String
+  role              String
+  permissions       String
+  status            String
+  token             String            @unique
+  acceptedAt        DateTime?
+  revokedAt         DateTime?
+  expiresAt         DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  member            CareCircleMember?
+
+  @@index([familyProfileId, status])
+  @@index([email, status])
+}
+
 model CareCircleMember {
-  id     String @id @default(uuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String                @id @default(uuid())
+  userId          String
+  user            User                  @relation("CareCircleMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  familyProfileId String
+  familyProfile   FamilyProfile         @relation("CareCircleMemberFamilyProfile", fields: [familyProfileId], references: [id], onDelete: Cascade)
+  invitationId    String?               @unique
+  invitation      CareCircleInvitation? @relation(fields: [invitationId], references: [id], onDelete: SetNull)
 
-  email       String
-  role        String // FAMILY_ADMIN, CAREGIVER, CLINICIAN_VIEWER, LIMITED_VIEWER
-  permissions String // JSON permissions, e.g. {"appointments": "read", "medications": "write", "vitals": "read"}
-  expiryDate  DateTime?
-  active      Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  email             String
+  relationshipLabel String
+  role              String
+  permissions       String
+  active            Boolean   @default(true)
+  acceptedAt        DateTime?
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  @@unique([userId, email])
+  @@unique([familyProfileId, email])
+  @@index([familyProfileId, active])
 }
 
 model EmergencyProfile {
   id              String        @id @default(uuid())
   familyProfileId String        @unique
-  familyProfile   FamilyProfile @relation(fields: [familyProfileId], references: [id], onDelete: Cascade)
+  familyProfile   FamilyProfile @relation("EmergencyProfileFamilyProfile", fields: [familyProfileId], references: [id], onDelete: Cascade)
 
-  bloodGroup        String?
-  emergencyContact  String?
-  criticalAllergies String?
-  conditions        String?
-  medications       String?
-  emergencyNotes    String?
-  token             String   @unique // unique secure token for QR access
-  active            Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  preferredName      String?
+  dateOfBirth        String?
+  bloodType          String?
+  allergies          String?
+  criticalConditions String?
+  currentMedications String?
+  primaryDoctor      String?
+  insuranceNote      String?
+  emergencyNote      String?
+  publicFields       String?
+  token              String    @unique
+  active             Boolean   @default(true)
+  expiresAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  contacts   EmergencyContact[]   @relation("EmergencyProfileContacts")
+  accessLogs EmergencyAccessLog[] @relation("EmergencyProfileAccessLogs")
+}
+
+model EmergencyContact {
+  id                 String            @id @default(uuid())
+  familyProfileId    String
+  familyProfile      FamilyProfile     @relation("EmergencyContactFamilyProfile", fields: [familyProfileId], references: [id], onDelete: Cascade)
+  name               String
+  relationship       String
+  phone              String
+  alternatePhone     String?
+  priority           Int               @default(1)
+  notes              String?
+  active             Boolean           @default(true)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  emergencyProfile   EmergencyProfile? @relation("EmergencyProfileContacts", fields: [emergencyProfileId], references: [id], onDelete: SetNull)
+  emergencyProfileId String?
+
+  @@index([familyProfileId, active])
+}
+
+model EmergencyAccessLog {
+  id                 String           @id @default(uuid())
+  familyProfileId    String
+  familyProfile      FamilyProfile    @relation("EmergencyAccessLogFamilyProfile", fields: [familyProfileId], references: [id], onDelete: Cascade)
+  emergencyProfileId String
+  emergencyProfile   EmergencyProfile @relation("EmergencyProfileAccessLogs", fields: [emergencyProfileId], references: [id], onDelete: Cascade)
+  tokenRef           String
+  timestamp          DateTime         @default(now())
+  requestMeta        String?
+
+  @@index([familyProfileId, timestamp])
+}
+
+model CaregiverHandoff {
+  id                   String        @id @default(uuid())
+  familyProfileId      String
+  familyProfile        FamilyProfile @relation(fields: [familyProfileId], references: [id], onDelete: Cascade)
+  outgoingCaregiverId  String?
+  incomingCaregiverId  String?
+  handoffDateTime      DateTime
+  summary              String
+  completedTasks       String?
+  pendingTasks         String?
+  medicationNotes      String?
+  appointmentNotes     String?
+  generalNotes         String?
+  acknowledgmentStatus String        @default("pending")
+  acknowledgedAt       DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([familyProfileId, handoffDateTime])
 }
 
 model Notification {

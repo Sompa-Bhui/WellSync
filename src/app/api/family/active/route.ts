@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/src/lib/db';
 import { getSessionUser, setActiveProfile } from '@/src/lib/auth';
+import { resolveProfileAccess } from '@/src/lib/authorization';
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,24 +14,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Profile ID is required' }, { status: 400 });
     }
 
-    // Verify ownership or authorization
-    const profile = await prisma.familyProfile.findFirst({
-      where: {
-        id: profileId,
-        userId: user.id,
-      },
-    });
-
-    if (!profile) {
-      return NextResponse.json(
-        { error: 'Profile not found or unauthorized' },
-        { status: 404 }
-      );
-    }
+    const access = await resolveProfileAccess(user.id, profileId);
+    if (!access) return NextResponse.json({ error: 'Profile not found or unauthorized' }, { status: 404 });
 
     await setActiveProfile(profileId);
 
-    return NextResponse.json({ success: true, activeProfile: profile });
+    return NextResponse.json({ success: true, activeProfile: access.familyProfile });
   } catch (error) {
     console.error('Active profile swapper error:', error);
     return NextResponse.json(

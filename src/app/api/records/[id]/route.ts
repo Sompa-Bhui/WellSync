@@ -3,12 +3,15 @@ import { prisma } from '@/src/lib/db';
 import { getSessionUser } from '@/src/lib/auth';
 import { ensureAppointmentOwnership } from '@/src/lib/appointments';
 import { ensureRecordOwnership, RECORD_CATEGORIES, serializeTags, recordTimelineEvent } from '@/src/lib/records';
+import { resolveActiveProfileAccess, canUsePermission } from '@/src/lib/authorization';
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
     const user = await getSessionUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { id } = await ctx.params;
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!canUsePermission(access, 'records.view')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const record = await ensureRecordOwnership(user.id, id);
     if (!record) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json(record);
@@ -23,6 +26,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     const user = await getSessionUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { id } = await ctx.params;
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!canUsePermission(access, 'records.add')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const record = await ensureRecordOwnership(user.id, id);
     if (!record) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -66,6 +71,8 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
     const user = await getSessionUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { id } = await ctx.params;
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!access || access.accessType !== 'owner') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const record = await ensureRecordOwnership(user.id, id);
     if (!record) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     await prisma.medicalRecord.delete({ where: { id } });

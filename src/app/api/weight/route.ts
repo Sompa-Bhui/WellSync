@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/src/lib/db';
 import { getSessionUser, getActiveProfile } from '@/src/lib/auth';
+import { resolveActiveProfileAccess, canUsePermission } from '@/src/lib/authorization';
 
 export async function GET(req: NextRequest) {
   try {
@@ -9,6 +10,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!canUsePermission(access, 'weight.view')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const activeProfile = await getActiveProfile(user.id);
     const url = new URL(req.url);
     const limit = parseInt(url.searchParams.get('limit') || '30');
@@ -22,10 +25,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(entries.reverse());
   } catch (error) {
     console.error('Weight GET error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error occurred' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error occurred' }, { status: 500 });
   }
 }
 
@@ -36,6 +36,8 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!access || access.accessType !== 'owner') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const activeProfile = await getActiveProfile(user.id);
     const url = new URL(req.url);
     const id = url.searchParams.get('id');
@@ -67,14 +69,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const access = await resolveActiveProfileAccess(user.id);
+    if (!access || access.accessType !== 'owner') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const activeProfile = await getActiveProfile(user.id);
     const { weight, date, notes } = await req.json();
 
     if (!weight || !date) {
-      return NextResponse.json(
-        { error: 'Weight and date are required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Weight and date are required' }, { status: 400 });
     }
 
     const weightVal = parseFloat(weight);
@@ -104,9 +105,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(entry);
   } catch (error) {
     console.error('Weight POST error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error occurred' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error occurred' }, { status: 500 });
   }
 }
