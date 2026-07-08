@@ -3,6 +3,7 @@ import { prisma } from '@/src/lib/db';
 import { getSessionUser, getActiveProfile } from '@/src/lib/auth';
 import { writeAuditLog } from '@/src/lib/audit';
 import { resolveActiveProfileAccess, canUsePermission } from '@/src/lib/authorization';
+import { getEmergencyTokenStatus, getPublicEmergencyUrl } from '@/src/lib/emergency';
 
 function token() {
   return crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
@@ -32,7 +33,9 @@ export async function GET() {
   if (!profile) return NextResponse.json(null);
   return NextResponse.json({
     ...profile,
-    token: undefined,
+    token: profile.token,
+    tokenStatus: getEmergencyTokenStatus(profile),
+    publicUrl: getPublicEmergencyUrl(profile.token),
     contacts: profile.contacts.map((contact) => ({
       id: contact.id,
       name: contact.name,

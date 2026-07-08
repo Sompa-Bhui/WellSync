@@ -538,6 +538,7 @@ async function main() {
       title: 'Upcoming Cardiology Appointment',
       message: 'Reminder: Appointment with Dr. Sharma on July 11 at 11:30 AM.',
       category: 'APPOINTMENT',
+      notificationType: 'APPOINTMENT',
       isRead: false,
     },
   });
@@ -548,6 +549,7 @@ async function main() {
       title: 'Medication Refill Warning',
       message: 'Multivitamin Formula A schedule has run for 30 days. Plan refill soon.',
       category: 'MEDICATION',
+      notificationType: 'MEDICATION',
       isRead: true,
     },
   });

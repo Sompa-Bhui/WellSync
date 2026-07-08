@@ -3,6 +3,7 @@ import { prisma } from '@/src/lib/db';
 import { getSessionUser, getActiveProfile } from '@/src/lib/auth';
 import { APPOINTMENT_STATUSES, serializeListField, createAppointmentTimelineEvent } from '@/src/lib/appointments';
 import { resolveActiveProfileAccess, canUsePermission } from '@/src/lib/authorization';
+import { upsertSourceReminder } from '@/src/lib/reminders';
 
 function isValidTime(time: unknown) {
   return typeof time === 'string' && /^\d{2}:\d{2}$/.test(time);
@@ -94,6 +95,19 @@ export async function POST(req: NextRequest) {
       eventId: appointment.id,
       title: `Appointment scheduled with ${appointment.doctor.name}`,
       description: `${appointment.date} at ${appointment.time}${appointment.isVirtual ? ' (virtual)' : ''}.`,
+    });
+
+    await upsertSourceReminder({
+      familyProfileId: activeProfile.id,
+      createdByUserId: user.id,
+      sourceType: 'APPOINTMENT',
+      sourceId: appointment.id,
+      title: `Appointment with ${appointment.doctor.name}`,
+      description: `${appointment.date} at ${appointment.time}${appointment.isVirtual ? ' (virtual)' : ''}.`,
+      scheduledAt: new Date(`${appointment.date}T${appointment.time}:00.000Z`),
+      recurrence: JSON.stringify({ type: 'NONE' }),
+      reminderType: 'APPOINTMENT',
+      enabled: appointment.status !== 'CANCELLED',
     });
 
     return NextResponse.json(appointment, { status: 201 });

@@ -3,6 +3,7 @@ import { prisma } from '@/src/lib/db';
 import { getSessionUser, getActiveProfile } from '@/src/lib/auth';
 import { resolveProfileAccess, canUsePermission } from '@/src/lib/authorization';
 import type { MealEntry, WaterEntry, WorkoutEntry, MedicationEvent } from '@prisma/client';
+const db = prisma;
 
 export async function GET(req: NextRequest) {
   try {
@@ -127,6 +128,14 @@ export async function GET(req: NextRequest) {
       take: 8,
     });
 
+    const [unreadNotificationCount, nextReminder] = await Promise.all([
+      db.notification.count({ where: { familyProfileId: activeProfile.id, isRead: false } }),
+      db.reminder.findFirst({
+        where: { familyProfileId: activeProfile.id, enabled: true, nextTriggerAt: { not: null } },
+        orderBy: { nextTriggerAt: 'asc' },
+      }),
+    ]);
+
     // 8. Generate Alerts / Attention List (Explainable Insights)
     const alerts: string[] = [];
     const healthProfile = user.healthProfile;
@@ -198,6 +207,15 @@ export async function GET(req: NextRequest) {
         status: nextAppointment.status,
       } : null,
       timelineEvents,
+      unreadNotificationCount,
+      nextReminder: nextReminder ? {
+        id: nextReminder.id,
+        title: nextReminder.title,
+        description: nextReminder.description,
+        nextTriggerAt: nextReminder.nextTriggerAt,
+        reminderType: nextReminder.reminderType,
+        sourceType: nextReminder.sourceType,
+      } : null,
       alerts,
     });
   } catch (error) {

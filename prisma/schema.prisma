@@ -21,6 +21,7 @@ model User {
   careCircleMembers     CareCircleMember[]     @relation("CareCircleMemberUser")
   auditLogs             AuditLog[]
   notifications         Notification[]
+  remindersCreated      Reminder[] @relation("ReminderCreatedBy")
 }
 
 model HealthProfile {
@@ -69,12 +70,14 @@ model FamilyProfile {
   followUpTasks         FollowUpTask[]
   timelineEvents        TimelineEvent[]
   medicalRecords        MedicalRecord[]
+  notifications         Notification[]
   careCircleInvitations CareCircleInvitation[] @relation("CareCircleInvitationFamilyProfile")
   careCircleMembers     CareCircleMember[]     @relation("CareCircleMemberFamilyProfile")
   emergencyProfile      EmergencyProfile?      @relation("EmergencyProfileFamilyProfile")
   emergencyContacts     EmergencyContact[]     @relation("EmergencyContactFamilyProfile")
   emergencyAccessLogs   EmergencyAccessLog[]   @relation("EmergencyAccessLogFamilyProfile")
   caregiverHandoffs     CaregiverHandoff[]
+  reminders             Reminder[]
 }
 
 model MealEntry {
@@ -422,14 +425,52 @@ model Notification {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  familyProfileId String?
+  familyProfile   FamilyProfile? @relation(fields: [familyProfileId], references: [id], onDelete: Cascade)
+
+  notificationType String
   title     String
   message   String
-  category  String // APPOINTMENT, HYDRATION, MEDICATION, RECORD, ACCESS, ALERT
+  category  String // APPOINTMENT, HYDRATION, MEDICATION, RECORD, ACCESS, ALERT, REMINDER
+  sourceType String?
+  sourceId   String?
+  reminderId String?
+  reminder   Reminder? @relation(fields: [reminderId], references: [id], onDelete: SetNull)
+  dedupKey   String? @unique
   isRead    Boolean  @default(false)
+  readAt    DateTime?
   timestamp DateTime @default(now())
   createdAt DateTime @default(now())
 
   @@index([userId, isRead])
+  @@index([familyProfileId, isRead])
+  @@index([notificationType, timestamp])
+}
+
+model Reminder {
+  id              String   @id @default(uuid())
+  familyProfileId  String
+  familyProfile    FamilyProfile @relation(fields: [familyProfileId], references: [id], onDelete: Cascade)
+  createdByUserId  String?
+  createdBy        User?    @relation("ReminderCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  reminderType     String
+  title            String
+  description      String?
+  scheduledAt      DateTime
+  timezone         String   @default("UTC")
+  recurrence       String?
+  enabled          Boolean  @default(true)
+  sourceType       String?
+  sourceId         String?
+  lastTriggeredAt   DateTime?
+  nextTriggerAt     DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  notifications    Notification[]
+
+  @@index([familyProfileId, enabled, nextTriggerAt])
+  @@unique([sourceType, sourceId])
 }
 
 model AuditLog {

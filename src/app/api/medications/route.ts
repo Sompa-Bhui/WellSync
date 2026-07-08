@@ -3,6 +3,7 @@ import { prisma } from '@/src/lib/db';
 import { getActiveProfile, getSessionUser } from '@/src/lib/auth';
 import { ensureTodayMedicationEvents, MEDICATION_FREQUENCIES, parseScheduleTimes } from '@/src/lib/medications';
 import { resolveActiveProfileAccess, canUsePermission } from '@/src/lib/authorization';
+import { upsertSourceReminder } from '@/src/lib/reminders';
 
 function parseBool(value: unknown) {
   return value === true || value === 'true';
@@ -80,6 +81,21 @@ export async function POST(req: NextRequest) {
         medicationEvents: { orderBy: { scheduledTime: 'desc' }, take: 10 },
       },
     });
+
+    for (const time of parseScheduleTimes(medication.scheduleTimes)) {
+      await upsertSourceReminder({
+        familyProfileId: activeProfile.id,
+        createdByUserId: user.id,
+        sourceType: 'MEDICATION',
+        sourceId: `${medication.id}:${time}`,
+        title: `${medication.name} dose reminder`,
+        description: medication.instructions || `${medication.dosage}${medication.unit} scheduled for ${time}.`,
+        scheduledAt: new Date(`${medication.startDate}T${time}:00.000Z`),
+        recurrence: JSON.stringify({ type: 'DAILY', intervalDays: 1 }),
+        reminderType: 'MEDICATION',
+        enabled: medication.reminderEnabled,
+      });
+    }
 
     return NextResponse.json(medication, { status: 201 });
   } catch (error) {

@@ -27,6 +27,7 @@ CREATE TABLE "EmergencyContact" (
     "phone" TEXT NOT NULL,
     "alternatePhone" TEXT,
     "priority" INTEGER NOT NULL DEFAULT 1,
+    "notes" TEXT,
     "active" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
@@ -160,4 +161,60 @@ CREATE INDEX "EmergencyAccessLog_familyProfileId_timestamp_idx" ON "EmergencyAcc
 
 -- CreateIndex
 CREATE INDEX "CaregiverHandoff_familyProfileId_handoffDateTime_idx" ON "CaregiverHandoff"("familyProfileId", "handoffDateTime");
+
+-- RedefineTables
+PRAGMA defer_foreign_keys=ON;
+PRAGMA foreign_keys=OFF;
+CREATE TABLE "new_Notification" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "familyProfileId" TEXT,
+    "notificationType" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "category" TEXT NOT NULL,
+    "sourceType" TEXT,
+    "sourceId" TEXT,
+    "reminderId" TEXT,
+    "dedupKey" TEXT,
+    "isRead" BOOLEAN NOT NULL DEFAULT false,
+    "readAt" DATETIME,
+    "timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "Notification_familyProfileId_fkey" FOREIGN KEY ("familyProfileId") REFERENCES "FamilyProfile" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+INSERT INTO "new_Notification" ("createdAt", "id", "isRead", "message", "notificationType", "timestamp", "title", "userId") SELECT "createdAt", "id", "isRead", "message", "category", "timestamp", "title", "userId" FROM "Notification";
+DROP TABLE "Notification";
+ALTER TABLE "new_Notification" RENAME TO "Notification";
+CREATE UNIQUE INDEX "Notification_dedupKey_key" ON "Notification"("dedupKey");
+CREATE INDEX "Notification_userId_isRead_idx" ON "Notification"("userId", "isRead");
+CREATE INDEX "Notification_familyProfileId_isRead_idx" ON "Notification"("familyProfileId", "isRead");
+CREATE INDEX "Notification_notificationType_timestamp_idx" ON "Notification"("notificationType", "timestamp");
+CREATE INDEX "Notification_reminderId_idx" ON "Notification"("reminderId");
+
+CREATE TABLE "Reminder" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "familyProfileId" TEXT NOT NULL,
+    "createdByUserId" TEXT,
+    "reminderType" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "scheduledAt" DATETIME NOT NULL,
+    "timezone" TEXT NOT NULL DEFAULT 'UTC',
+    "recurrence" TEXT,
+    "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "sourceType" TEXT,
+    "sourceId" TEXT,
+    "lastTriggeredAt" DATETIME,
+    "nextTriggerAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "Reminder_familyProfileId_fkey" FOREIGN KEY ("familyProfileId") REFERENCES "FamilyProfile" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "Reminder_createdByUserId_fkey" FOREIGN KEY ("createdByUserId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+CREATE INDEX "Reminder_familyProfileId_enabled_nextTriggerAt_idx" ON "Reminder"("familyProfileId", "enabled", "nextTriggerAt");
+CREATE UNIQUE INDEX "Reminder_sourceType_sourceId_key" ON "Reminder"("sourceType", "sourceId");
+PRAGMA foreign_keys=ON;
+PRAGMA defer_foreign_keys=OFF;
 

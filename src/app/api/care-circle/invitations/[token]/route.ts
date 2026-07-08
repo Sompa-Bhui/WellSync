@@ -51,3 +51,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
   await writeAuditLog({ userId: user.id, action: 'CARE_CIRCLE_INVITE_ACCEPTED', target: `FamilyProfile:${invitation.familyProfileId}` });
   return NextResponse.json(member, { status: 201 });
 }
+
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ token: string }> }) {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { token } = await ctx.params;
+  const invitation = await prisma.careCircleInvitation.findUnique({ where: { token } });
+  if (!invitation) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (invitation.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (invitation.status !== 'pending') return NextResponse.json({ error: 'Invitation no longer pending' }, { status: 409 });
+  await prisma.careCircleInvitation.update({ where: { token }, data: { status: 'revoked', revokedAt: new Date() } });
+  await writeAuditLog({ userId: user.id, action: 'CARE_CIRCLE_INVITE_REVOKED', target: `FamilyProfile:${invitation.familyProfileId}` });
+  return NextResponse.json({ success: true });
+}

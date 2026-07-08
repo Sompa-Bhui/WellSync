@@ -3,6 +3,7 @@ import { prisma } from '@/src/lib/db';
 import { getSessionUser } from '@/src/lib/auth';
 import { ensureAppointmentOwnership, createFollowUpTimelineEvent } from '@/src/lib/appointments';
 import { resolveActiveProfileAccess, canUsePermission } from '@/src/lib/authorization';
+import { upsertSourceReminder } from '@/src/lib/reminders';
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -61,6 +62,19 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       description: `Due ${followUp.dueDate}.`,
     });
 
+    await upsertSourceReminder({
+      familyProfileId: appointment.familyProfileId,
+      createdByUserId: user.id,
+      sourceType: 'FOLLOW_UP',
+      sourceId: followUp.id,
+      title: followUp.title,
+      description: followUp.details || `Due ${followUp.dueDate}.`,
+      scheduledAt: new Date(`${followUp.dueDate}T09:00:00.000Z`),
+      recurrence: JSON.stringify({ type: 'NONE' }),
+      reminderType: 'FOLLOW_UP',
+      enabled: true,
+    });
+
     return NextResponse.json(followUp, { status: 201 });
   } catch (error) {
     console.error('Follow-up POST error:', error);
@@ -101,6 +115,19 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         scheduledAppointmentId,
         completedAt: nextStatus === 'completed' ? new Date() : nextStatus === 'dismissed' ? null : followUp.completedAt,
       },
+    });
+
+    await upsertSourceReminder({
+      familyProfileId: appointment.familyProfileId,
+      createdByUserId: user.id,
+      sourceType: 'FOLLOW_UP',
+      sourceId: followUp.id,
+      title: updated.title,
+      description: updated.details || `Due ${updated.dueDate}.`,
+      scheduledAt: new Date(`${updated.dueDate}T09:00:00.000Z`),
+      recurrence: JSON.stringify({ type: 'NONE' }),
+      reminderType: 'FOLLOW_UP',
+      enabled: updated.status === 'pending' || updated.status === 'scheduled',
     });
 
     return NextResponse.json(updated);

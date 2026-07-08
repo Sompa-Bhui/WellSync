@@ -3,6 +3,7 @@ import { prisma } from '@/src/lib/db';
 import { getSessionUser } from '@/src/lib/auth';
 import { ensureAppointmentOwnership, createAppointmentTimelineEvent, parseListField, serializeListField } from '@/src/lib/appointments';
 import { resolveActiveProfileAccess, canUsePermission } from '@/src/lib/authorization';
+import { upsertSourceReminder } from '@/src/lib/reminders';
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -63,6 +64,18 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         title: `Appointment rescheduled to ${newDate} ${newTime}`,
         description: `Previous time preserved in timeline. New status: RESCHEDULED.`,
       });
+      await upsertSourceReminder({
+        familyProfileId: existing.familyProfileId,
+        createdByUserId: user.id,
+        sourceType: 'APPOINTMENT',
+        sourceId: existing.id,
+        title: `Appointment with ${existing.doctor.name}`,
+        description: updated.notes || `${newDate} ${newTime}`,
+        scheduledAt: new Date(`${newDate}T${newTime}:00.000Z`),
+        recurrence: JSON.stringify({ type: 'NONE' }),
+        reminderType: 'APPOINTMENT',
+        enabled: true,
+      });
     } else if (action === 'complete') {
       updated = await prisma.appointment.update({
         where: { id },
@@ -77,6 +90,18 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         eventId: existing.id,
         title: `Appointment completed with ${existing.doctor.name}`,
         description: 'Visit marked complete and post-visit records can now be added.',
+      });
+      await upsertSourceReminder({
+        familyProfileId: existing.familyProfileId,
+        createdByUserId: user.id,
+        sourceType: 'APPOINTMENT',
+        sourceId: existing.id,
+        title: `Appointment with ${existing.doctor.name}`,
+        description: existing.notes || existing.reason || 'Completed appointment.',
+        scheduledAt: new Date(`${existing.date}T${existing.time}:00.000Z`),
+        recurrence: JSON.stringify({ type: 'NONE' }),
+        reminderType: 'APPOINTMENT',
+        enabled: false,
       });
     } else if (action === 'cancel') {
       updated = await prisma.appointment.update({
@@ -93,6 +118,18 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         title: `Appointment cancelled with ${existing.doctor.name}`,
         description: body.notes ? String(body.notes) : 'Appointment cancelled.',
       });
+      await upsertSourceReminder({
+        familyProfileId: existing.familyProfileId,
+        createdByUserId: user.id,
+        sourceType: 'APPOINTMENT',
+        sourceId: existing.id,
+        title: `Appointment with ${existing.doctor.name}`,
+        description: body.notes ? String(body.notes) : 'Appointment cancelled.',
+        scheduledAt: new Date(`${existing.date}T${existing.time}:00.000Z`),
+        recurrence: JSON.stringify({ type: 'NONE' }),
+        reminderType: 'APPOINTMENT',
+        enabled: false,
+      });
     } else {
       updated = await prisma.appointment.update({
         where: { id },
@@ -108,6 +145,18 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
           followUpDate: body.followUpDate ? String(body.followUpDate) : existing.followUpDate,
         },
         include: { doctor: true, medicalRecords: true },
+      });
+      await upsertSourceReminder({
+        familyProfileId: existing.familyProfileId,
+        createdByUserId: user.id,
+        sourceType: 'APPOINTMENT',
+        sourceId: existing.id,
+        title: `Appointment with ${existing.doctor.name}`,
+        description: updated.notes || updated.reason || null,
+        scheduledAt: new Date(`${updated.date}T${updated.time}:00.000Z`),
+        recurrence: JSON.stringify({ type: 'NONE' }),
+        reminderType: 'APPOINTMENT',
+        enabled: updated.status !== 'CANCELLED',
       });
     }
 

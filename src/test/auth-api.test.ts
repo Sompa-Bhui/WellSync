@@ -52,12 +52,30 @@ async function createFixture() {
   const viewer = await prisma.user.create({
     data: { email: `viewer-${suffix}@example.com`, password: 'pw', name: 'Viewer' },
   });
-
+  const invitee = await prisma.user.create({
+    data: { email: `invited-${suffix}@example.com`, password: 'pw', name: 'Invitee' },
+  });
+  const stranger = await prisma.user.create({
+    data: { email: `stranger-${suffix}@example.com`, password: 'pw', name: 'Stranger' },
+  });
   const profileA = await prisma.familyProfile.create({
     data: { userId: ownerA.id, name: 'Profile A', relationship: 'SELF' },
   });
   const profileB = await prisma.familyProfile.create({
     data: { userId: ownerB.id, name: 'Profile B', relationship: 'SELF' },
+  });
+  const invitedWrongEmail = await prisma.careCircleInvitation.create({
+    data: {
+      userId: ownerA.id,
+      familyProfileId: profileA.id,
+      email: `wrong-${suffix}@example.com`,
+      relationshipLabel: 'Wrong email',
+      role: 'viewer',
+      permissions: JSON.stringify(defaultPermissions('viewer')),
+      status: 'pending',
+      token: `wrong-email-${suffix}`,
+      expiresAt: new Date(Date.now() + 86400000),
+    },
   });
 
   const caregiverMember = await prisma.careCircleMember.create({
@@ -214,6 +232,18 @@ async function createFixture() {
       fileUrl: '/records/a',
     },
   });
+  const strangerMember = await prisma.careCircleMember.create({
+    data: {
+      userId: stranger.id,
+      familyProfileId: profileB.id,
+      email: stranger.email,
+      relationshipLabel: 'Stranger',
+      role: 'viewer',
+      permissions: JSON.stringify(defaultPermissions('viewer')),
+      active: true,
+      acceptedAt: new Date(),
+    },
+  });
   const recordB = await prisma.medicalRecord.create({
     data: {
       familyProfileId: profileB.id,
@@ -273,7 +303,7 @@ async function createFixture() {
     data: {
       userId: ownerA.id,
       familyProfileId: profileA.id,
-      email: 'invited@example.com',
+      email: invitee.email,
       relationshipLabel: 'Invitee',
       role: 'caregiver',
       permissions: JSON.stringify(defaultPermissions('caregiver')),
@@ -288,10 +318,13 @@ async function createFixture() {
     ownerB,
     caregiver,
     viewer,
+    invitee,
+    stranger,
     profileA,
     profileB,
     caregiverMember,
     viewerMember,
+    strangerMember,
     sleepA,
     sleepB,
     weightA,
@@ -314,6 +347,7 @@ async function createFixture() {
     handoffB,
     emergencyProfile,
     invitation,
+    invitedWrongEmail,
   };
 }
 
@@ -335,7 +369,7 @@ async function cleanupFixture(fixture: Awaited<ReturnType<typeof createFixture>>
     prisma.careCircleInvitation.deleteMany({ where: { familyProfileId: { in: [fixture.profileA.id, fixture.profileB.id] } } }),
     prisma.doctor.deleteMany({ where: { id: { in: [fixture.appointmentA.doctorId, fixture.appointmentB.doctorId] } } }),
     prisma.familyProfile.deleteMany({ where: { id: { in: [fixture.profileA.id, fixture.profileB.id] } } }),
-    prisma.user.deleteMany({ where: { id: { in: [fixture.ownerA.id, fixture.ownerB.id, fixture.caregiver.id, fixture.viewer.id] } } }),
+    prisma.user.deleteMany({ where: { id: { in: [fixture.ownerA.id, fixture.ownerB.id, fixture.caregiver.id, fixture.viewer.id, fixture.invitee.id, fixture.stranger.id] } } }),
   ]);
 }
 
@@ -447,8 +481,238 @@ test('emergency public route limits leakage to visible fields only', async (t) =
   const body = await jsonResponse(res);
   assert.equal(body.preferredName, 'Visible Name');
   assert.equal(body.bloodType, 'O+');
+  assert.equal(body.currentMedications, null);
   assert.equal(body.emergencyNote, null);
   assert.equal(body.id, undefined);
   assert.deepEqual(body.contacts, []);
+
+  const expired = await prisma.emergencyProfile.create({
+    data: {
+      familyProfileId: fixture.profileB.id,
+      preferredName: 'Expired',
+      publicFields: JSON.stringify(['preferredName']),
+      token: `expired-emergency-${Date.now()}`,
+      active: true,
+      expiresAt: new Date(Date.now() - 1000),
+    },
+  });
+  const revoked = await prisma.emergencyProfile.update({
+    where: { familyProfileId: fixture.profileA.id },
+    data: { active: false, expiresAt: null },
+  });
+  const expiredRes = await callRoute('./../app/api/emergency/public/[token]/route', 'GET', `http://localhost/api/emergency/public/${expired.token}`, {}, { token: expired.token });
+  const revokedRes = await callRoute('./../app/api/emergency/public/[token]/route', 'GET', `http://localhost/api/emergency/public/${revoked.token}`, {}, { token: revoked.token });
+  assert.equal(expiredRes.status, 404);
+  assert.equal(revokedRes.status, 404);
+});
+
+test('care circle invitation abuse is denied safely', async (t) => {
+  const fixture = await createFixture();
+  t.after(() => cleanupFixture(fixture));
+
+  const ownerToken = signToken({ userId: fixture.ownerA.id, email: fixture.ownerA.email, name: fixture.ownerA.name });
+  const inviteeToken = signToken({ userId: fixture.invitee.id, email: fixture.invitee.email, name: fixture.invitee.name });
+  setSession(ownerToken, fixture.profileA.id);
+
+  const selfInvite = await callRoute('./../app/api/care-circle/route', 'POST', 'http://localhost/api/care-circle', {
+    method: 'POST',
+    body: JSON.stringify({ familyProfileId: fixture.profileA.id, email: fixture.ownerA.email, role: 'caregiver' }),
+  });
+  assert.equal(selfInvite.status, 400);
+
+  const duplicateInvite = await callRoute('./../app/api/care-circle/route', 'POST', 'http://localhost/api/care-circle', {
+    method: 'POST',
+    body: JSON.stringify({ familyProfileId: fixture.profileA.id, email: fixture.invitation.email, role: 'caregiver' }),
+  });
+  assert.equal(duplicateInvite.status, 409);
+
+  const caregiverToken = signToken({ userId: fixture.caregiver.id, email: fixture.caregiver.email, name: fixture.caregiver.name });
+  setSession(caregiverToken, fixture.profileA.id);
+  const caregiverInvite = await callRoute('./../app/api/care-circle/route', 'POST', 'http://localhost/api/care-circle', {
+    method: 'POST',
+    body: JSON.stringify({ familyProfileId: fixture.profileA.id, email: `new-${fixture.caregiver.email}`, role: 'caregiver' }),
+  });
+  assert.equal(caregiverInvite.status, 403);
+
+  const viewerToken = signToken({ userId: fixture.viewer.id, email: fixture.viewer.email, name: fixture.viewer.name });
+  setSession(viewerToken, fixture.profileA.id);
+  const viewerInvite = await callRoute('./../app/api/care-circle/route', 'POST', 'http://localhost/api/care-circle', {
+    method: 'POST',
+    body: JSON.stringify({ familyProfileId: fixture.profileA.id, email: `new-${fixture.viewer.email}`, role: 'viewer' }),
+  });
+  assert.equal(viewerInvite.status, 403);
+
+  const crossProfileInvite = await callRoute('./../app/api/care-circle/route', 'POST', 'http://localhost/api/care-circle', {
+    method: 'POST',
+    body: JSON.stringify({ familyProfileId: fixture.profileB.id, email: 'cross@example.com', role: 'viewer' }),
+  });
+  assert.equal(crossProfileInvite.status, 403);
+
+  setSession(inviteeToken, fixture.profileA.id);
+  const accepted = await callRoute('./../app/api/care-circle/invitations/[token]/route', 'POST', `http://localhost/api/care-circle/invitations/${fixture.invitation.token}`, {
+    method: 'POST',
+    body: JSON.stringify({ decision: 'accept' }),
+  }, { token: fixture.invitation.token });
+  assert.equal(accepted.status, 201);
+
+  const acceptedReuse = await callRoute('./../app/api/care-circle/invitations/[token]/route', 'POST', `http://localhost/api/care-circle/invitations/${fixture.invitation.token}`, {
+    method: 'POST',
+    body: JSON.stringify({ decision: 'accept' }),
+  }, { token: fixture.invitation.token });
+  assert.equal(acceptedReuse.status, 410);
+
+  const unrelatedToken = signToken({ userId: fixture.ownerB.id, email: fixture.ownerB.email, name: fixture.ownerB.name });
+  setSession(unrelatedToken, fixture.profileB.id);
+  const wrongEmailAccept = await callRoute('./../app/api/care-circle/invitations/[token]/route', 'POST', `http://localhost/api/care-circle/invitations/${fixture.invitedWrongEmail.token}`, {
+    method: 'POST',
+    body: JSON.stringify({ decision: 'accept' }),
+  }, { token: fixture.invitedWrongEmail.token });
+  assert.equal(wrongEmailAccept.status, 403);
+
+  const malformedToken = await callRoute('./../app/api/care-circle/invitations/[token]/route', 'POST', 'http://localhost/api/care-circle/invitations/not-a-token', {
+    method: 'POST',
+    body: JSON.stringify({ decision: 'accept' }),
+  }, { token: 'not-a-token' });
+  assert.equal(malformedToken.status, 404);
+
+  const nonexistentToken = await callRoute('./../app/api/care-circle/invitations/[token]/route', 'POST', 'http://localhost/api/care-circle/invitations/does-not-exist', {
+    method: 'POST',
+    body: JSON.stringify({ decision: 'accept' }),
+  }, { token: 'does-not-exist' });
+  assert.equal(nonexistentToken.status, 404);
+
+  const expired = await prisma.careCircleInvitation.create({
+    data: {
+      userId: fixture.ownerA.id,
+      familyProfileId: fixture.profileA.id,
+      email: `expired-${fixture.ownerA.email}`,
+      relationshipLabel: 'Expired',
+      role: 'viewer',
+      permissions: JSON.stringify(defaultPermissions('viewer')),
+      status: 'pending',
+      token: `expired-${Date.now()}`,
+      expiresAt: new Date(Date.now() - 1000),
+    },
+  });
+  const expiredReuse = await callRoute('./../app/api/care-circle/invitations/[token]/route', 'POST', `http://localhost/api/care-circle/invitations/${expired.token}`, {
+    method: 'POST',
+    body: JSON.stringify({ decision: 'accept' }),
+  }, { token: expired.token });
+  assert.equal(expiredReuse.status, 410);
+
+  const revoked = await prisma.careCircleInvitation.create({
+    data: {
+      userId: fixture.ownerA.id,
+      familyProfileId: fixture.profileA.id,
+      email: `revoked-${fixture.ownerA.email}`,
+      relationshipLabel: 'Revoked',
+      role: 'viewer',
+      permissions: JSON.stringify(defaultPermissions('viewer')),
+      status: 'revoked',
+      token: `revoked-${Date.now()}`,
+      revokedAt: new Date(),
+    },
+  });
+  const revokedReuse = await callRoute('./../app/api/care-circle/invitations/[token]/route', 'POST', `http://localhost/api/care-circle/invitations/${revoked.token}`, {
+    method: 'POST',
+    body: JSON.stringify({ decision: 'accept' }),
+  }, { token: revoked.token });
+  assert.equal(revokedReuse.status, 410);
+});
+
+test('care circle member escalation and cross-profile manipulation are denied', async (t) => {
+  const fixture = await createFixture();
+  t.after(() => cleanupFixture(fixture));
+
+  const caregiverToken = signToken({ userId: fixture.caregiver.id, email: fixture.caregiver.email, name: fixture.caregiver.name });
+  setSession(caregiverToken, fixture.profileA.id);
+
+  const selfRoleEdit = await callRoute('./../app/api/care-circle/members/[id]/route', 'PATCH', `http://localhost/api/care-circle/members/${fixture.caregiverMember.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role: 'owner' }),
+  }, { id: fixture.caregiverMember.id });
+  assert.equal(selfRoleEdit.status, 403);
+
+  const selfDelete = await callRoute('./../app/api/care-circle/members/[id]/route', 'DELETE', `http://localhost/api/care-circle/members/${fixture.caregiverMember.id}`, {
+    method: 'DELETE',
+  }, { id: fixture.caregiverMember.id });
+  assert.equal(selfDelete.status, 200);
+
+  const revokeOwner = await callRoute('./../app/api/care-circle/members/[id]/route', 'DELETE', `http://localhost/api/care-circle/members/${fixture.viewerMember.id}`, {
+    method: 'DELETE',
+  }, { id: fixture.viewerMember.id });
+  assert.equal(revokeOwner.status, 404);
+
+  const crossProfileMemberUpdate = await callRoute('./../app/api/care-circle/members/[id]/route', 'PATCH', `http://localhost/api/care-circle/members/${fixture.strangerMember.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ relationshipLabel: 'Edited' }),
+  }, { id: fixture.strangerMember.id });
+  assert.equal(crossProfileMemberUpdate.status, 404);
+
+  const viewerToken = signToken({ userId: fixture.viewer.id, email: fixture.viewer.email, name: fixture.viewer.name });
+  setSession(viewerToken, fixture.profileA.id);
+  const viewerUpdate = await callRoute('./../app/api/care-circle/members/[id]/route', 'PATCH', `http://localhost/api/care-circle/members/${fixture.viewerMember.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ permissions: { records: true } }),
+  }, { id: fixture.viewerMember.id });
+  assert.equal(viewerUpdate.status, 403);
+
+  const unrelatedAppointment = await callRoute('./../app/api/appointments/[id]/route', 'PATCH', `http://localhost/api/appointments/${fixture.appointmentB.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'CONFIRMED' }),
+  }, { id: fixture.appointmentB.id });
+  assert.equal(unrelatedAppointment.status, 403);
+});
+
+test('handoff creation, acknowledgement, and audit visibility are restricted', async (t) => {
+  const fixture = await createFixture();
+  t.after(() => cleanupFixture(fixture));
+
+  const caregiverToken = signToken({ userId: fixture.caregiver.id, email: fixture.caregiver.email, name: fixture.caregiver.name });
+  setSession(caregiverToken, fixture.profileA.id);
+
+  const createDenied = await callRoute('./../app/api/care-circle/handoffs/route', 'POST', 'http://localhost/api/care-circle/handoffs', {
+    method: 'POST',
+    body: JSON.stringify({
+      familyProfileId: fixture.profileB.id,
+      outgoingCaregiverId: fixture.caregiver.id,
+      handoffDateTime: '2026-07-14T10:00:00Z',
+      summary: 'handoff',
+    }),
+  });
+  assert.equal(createDenied.status, 404);
+
+  const ownHandoff = await callRoute('./../app/api/care-circle/handoffs/route', 'POST', 'http://localhost/api/care-circle/handoffs', {
+    method: 'POST',
+    body: JSON.stringify({
+      outgoingCaregiverId: fixture.caregiver.id,
+      handoffDateTime: '2026-07-14T10:00:00Z',
+      summary: 'Shift notes',
+      completedTasks: 'Completed checklist',
+      pendingTasks: 'Monitor sleep',
+      medicationNotes: 'Observed routine only',
+      appointmentNotes: 'Observed upcoming visit',
+      generalNotes: 'No diagnosis',
+    }),
+  });
+  assert.equal(ownHandoff.status, 201);
+  const created = await ownHandoff.json();
+
+  const duplicateAck = await callRoute('./../app/api/care-circle/handoffs/[id]/route', 'PATCH', `http://localhost/api/care-circle/handoffs/${created.id}`, { method: 'PATCH' }, { id: created.id });
+  assert.equal(duplicateAck.status, 200);
+  const duplicateAckAgain = await callRoute('./../app/api/care-circle/handoffs/[id]/route', 'PATCH', `http://localhost/api/care-circle/handoffs/${created.id}`, { method: 'PATCH' }, { id: created.id });
+  assert.equal(duplicateAckAgain.status, 200);
+
+  const ownerToken = signToken({ userId: fixture.ownerA.id, email: fixture.ownerA.email, name: fixture.ownerA.name });
+  setSession(ownerToken, fixture.profileA.id);
+  const auditUser = await callRoute('./../app/api/audit/route', 'GET', 'http://localhost/api/audit');
+  assert.equal(auditUser.status, 200);
+  const auditBody = await auditUser.json();
+  assert.ok(Array.isArray(auditBody.logs));
+
+  const viewerToken = signToken({ userId: fixture.viewer.id, email: fixture.viewer.email, name: fixture.viewer.name });
+  setSession(viewerToken, fixture.profileA.id);
+  const auditDenied = await callRoute('./../app/api/audit/route', 'GET', 'http://localhost/api/audit');
+  assert.equal(auditDenied.status, 403);
 });
 

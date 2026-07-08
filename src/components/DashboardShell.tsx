@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/src/context/AuthContext';
@@ -18,6 +18,7 @@ import {
   Users,
   ShieldAlert,
   Bell,
+  ListTodo,
   LogOut,
   ChevronDown,
   Menu,
@@ -29,15 +30,37 @@ import { Modal, Button } from '@/src/components/ui/primitives';
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, activeProfile, familyProfiles, switchProfile, logout, isLoading } = useAuth();
   const pathname = usePathname();
+  const activeProfileId = activeProfile?.id ?? '';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [notifDrawerOpen, setNotifDrawerOpen] = useState(false);
   const [emergencyOpen, setEmergencyOpen] = useState(false);
-  const [notifications, setNotifications] = useState([
-    { id: 1, title: 'Upcoming Appointment', message: 'Follow-up with Dr. Sharma on July 11 at 11:30 AM.', time: '1h ago', unread: true },
-    { id: 2, title: 'Medication Adherence', message: 'Missed scheduled dose for Amlodipine (Father) yesterday.', time: '1d ago', unread: true },
-    { id: 3, title: 'Medical Report Uploaded', message: 'Apex Lab uploaded lipid profile blood test result.', time: '2d ago', unread: false }
-  ]);
+  const [notifications, setNotifications] = useState<{ id: string; title: string; message: string; unread: boolean; timestamp: string }[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadNotifications = async () => {
+      try {
+        const response = await fetch('/api/notifications');
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!mounted) return;
+        setNotifications((data.notifications || []).map((item: { id: string; title: string; message: string; isRead: boolean; timestamp: string }) => ({
+          id: item.id,
+          title: item.title,
+          message: item.message,
+          unread: !item.isRead,
+          timestamp: item.timestamp,
+        })));
+      } catch {
+        if (mounted) setNotifications([]);
+      }
+    };
+    loadNotifications();
+    return () => {
+      mounted = false;
+    };
+  }, [activeProfileId]);
 
   if (isLoading || !user || !activeProfile) {
     return (
@@ -59,6 +82,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     { name: 'Appointments', href: '/dashboard/appointments', icon: Calendar },
     { name: 'Records Vault', href: '/dashboard/records', icon: FileText },
     { name: 'Connected Timeline', href: '/dashboard/timeline', icon: Clock },
+    { name: 'Notifications', href: '/dashboard/notifications', icon: ListTodo },
     { name: 'Care Circle', href: '/dashboard/care-circle', icon: Users },
     { name: 'Emergency Profile', href: '/dashboard/emergency', icon: ShieldAlert },
   ];
@@ -68,11 +92,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     setProfileDropdownOpen(false);
   };
 
-  const handleMarkAllRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, unread: false })));
-  };
-
   const unreadCount = notifications.filter(n => n.unread).length;
+  const isSharedContext = activeProfile.relationship !== 'SELF';
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -176,6 +197,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             <span>Hi, {user.name}</span>
             <span className="text-border">|</span>
             <span className="text-foreground font-medium">Active: {activeProfile.name}</span>
+            {isSharedContext && (
+              <>
+                <span className="text-border">|</span>
+                <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">Shared with you</span>
+              </>
+            )}
           </div>
 
           {/* Action Header Items */}
@@ -197,7 +224,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 <div className="absolute right-0 mt-2 w-80 bg-popover border border-border rounded-lg shadow-2xl z-50 py-2">
                   <div className="flex items-center justify-between px-4 pb-2 border-b border-border/45 mb-2">
                     <span className="text-xs font-bold text-foreground uppercase tracking-wider">Alert Center</span>
-                    <button onClick={handleMarkAllRead} className="text-xs text-primary hover:underline cursor-pointer">
+                    <button onClick={async () => {
+                      await fetch('/api/notifications/read-all', { method: 'POST' });
+                      setNotifications(notifications.map(n => ({ ...n, unread: false })));
+                    }} className="text-xs text-primary hover:underline cursor-pointer">
                       Mark read
                     </button>
                   </div>
@@ -206,7 +236,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                       <div key={n.id} className={`p-2.5 rounded-lg text-xs leading-relaxed transition-colors ${n.unread ? 'bg-primary/5 border border-primary/10' : 'bg-transparent'}`}>
                         <div className="flex justify-between items-start mb-0.5">
                           <span className="font-semibold text-foreground">{n.title}</span>
-                          <span className="text-[10px] text-muted-foreground shrink-0 ml-2">{n.time}</span>
+                        <span className="text-[10px] text-muted-foreground shrink-0 ml-2">{new Date(n.timestamp).toLocaleString()}</span>
                         </div>
                         <p className="text-muted-foreground">{n.message}</p>
                       </div>
@@ -238,6 +268,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                       }`}
                     >
                       <span>{p.name}</span>
+                      {p.relationship !== 'SELF' ? <span className="ml-2 text-[10px] uppercase tracking-wider text-primary">Shared</span> : null}
                     </button>
                   ))}
                   <div className="border-t border-border/40 mt-1 py-1">

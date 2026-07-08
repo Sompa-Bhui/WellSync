@@ -16,6 +16,9 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const active = await getActiveProfile(user.id);
   const body = await req.json();
+  if (body.familyProfileId && String(body.familyProfileId) !== active.id) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   const handoff = await prisma.caregiverHandoff.create({
     data: {
       familyProfileId: active.id,
