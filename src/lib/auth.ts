@@ -2,8 +2,8 @@ import bcrypt from 'bcryptjs';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
 import { cookies } from 'next/headers';
 import { prisma } from './db';
+import { getJwtSecret } from './env';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'wellsync-development-secret-key-987654321';
 const COOKIE_NAME = 'wellsync_session';
 const ACTIVE_PROFILE_COOKIE = 'wellsync_active_profile_id';
 type CookieStore = Awaited<ReturnType<typeof cookies>>;
@@ -27,12 +27,12 @@ export async function comparePassword(password: string, hash: string): Promise<b
 }
 
 export function signToken(payload: { userId: string; email: string; name: string }): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' });
 }
 
 export function verifyToken(token: string): JwtPayload | string | null {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    return jwt.verify(token, getJwtSecret());
   } catch {
     return null;
   }

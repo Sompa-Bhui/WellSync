@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "test:auth:core": "tsx --test src/test/auth-api.test.ts src/lib/permissions.test.ts src/lib/emergency.test.ts",
     "test:auth": "node scripts/run-auth-tests.mjs",
+    "migrations:verify": "node scripts/verify-migrations.mjs",
     "reminders:process": "tsx scripts/process-reminders.mjs"
   },
   "dependencies": {

@@ -119,6 +119,75 @@ test('notification APIs are profile-scoped and support read-all', async (t) => {
   assert.equal(updatedCount, 0);
 });
 
+test('single notification read is profile-scoped', async (t) => {
+  const data = await fixture();
+  t.after(() => cleanup(data));
+
+  const token = signToken({ userId: data.user.id, email: data.user.email, name: data.user.name });
+  setSession(token, data.profile.id);
+
+  const notification = await db.notification.create({
+    data: {
+      userId: data.user.id,
+      familyProfileId: data.profile.id,
+      title: 'Read me',
+      message: 'Single notification',
+      category: 'REMINDER',
+      notificationType: 'CUSTOM',
+      sourceType: 'CUSTOM',
+      sourceId: `single-${Date.now()}`,
+      dedupKey: `single-dedup-${Date.now()}`,
+      isRead: false,
+      timestamp: new Date(),
+    },
+  });
+
+  const routeModule = await import('./../app/api/notifications/[id]/route');
+  const response = await routeModule.PATCH(new Request('http://localhost/api/notifications/' + notification.id) as unknown as Parameters<typeof routeModule.PATCH>[0], { params: Promise.resolve({ id: notification.id }) });
+  assert.equal(response.status, 200);
+
+  const stored = await db.notification.findUnique({ where: { id: notification.id } });
+  assert.equal(stored?.isRead, true);
+});
+
+test('hydration and custom reminder sources are deduplicated safely', async (t) => {
+  const data = await fixture();
+  t.after(() => cleanup(data));
+
+  const token = signToken({ userId: data.user.id, email: data.user.email, name: data.user.name });
+  setSession(token, data.profile.id);
+
+  const waterModule = await import('./../app/api/water/route');
+  await waterModule.POST(new Request('http://localhost/api/water', {
+    method: 'POST',
+    body: JSON.stringify({ amount: 350, beverageType: 'Water' }),
+    headers: { 'Content-Type': 'application/json' },
+  }) as unknown as Parameters<typeof waterModule.POST>[0]);
+
+  const hydrationReminder = await db.reminder.findFirst({
+    where: { familyProfileId: data.profile.id, sourceType: 'HYDRATION' },
+  });
+  assert.ok(hydrationReminder);
+
+  const customReminder = await db.reminder.create({
+    data: {
+      familyProfileId: data.profile.id,
+      createdByUserId: data.user.id,
+      reminderType: 'CUSTOM',
+      sourceType: 'CUSTOM',
+      sourceId: `custom-${data.profile.id}`,
+      title: 'Custom reminder',
+      scheduledAt: new Date('2026-07-08T12:00:00Z'),
+      timezone: 'UTC',
+      enabled: true,
+    },
+  });
+
+  await processDueReminders({ now: new Date('2026-07-08T12:05:00Z'), familyProfileId: data.profile.id });
+  const notification = await db.notification.findFirst({ where: { reminderId: customReminder.id } });
+  assert.ok(notification);
+});
+
 test('recurrence parser and scheduler handle malformed input safely', () => {
   const recurrence = parseReminderRecurrence('not-json');
   assert.deepEqual(recurrence, { type: 'NONE' });

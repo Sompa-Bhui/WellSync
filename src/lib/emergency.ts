@@ -1,5 +1,7 @@
+import { getAppBaseUrl } from './env';
+
 export function getPublicEmergencyUrl(token: string) {
-  const base = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const base = getAppBaseUrl();
   return `${base}/emergency/${token}`;
 }
 

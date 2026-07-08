@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# WellSync
 
-## Getting Started
+WellSync is a Next.js health coordination app for nutrition, hydration, sleep, weight, medications, appointments, reminders, records, care circle access, and emergency profile sharing.
 
-First, run the development server:
+## Tech Stack
+
+- Next.js 16
+- React 19
+- Prisma 6
+- SQLite for local development
+- PostgreSQL for production
+
+## Local Setup
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+See [`.env.example`](/C:/Users/Sompa%20Bhui/Desktop/WellSync/.env.example) for the required variables:
 
-## Learn More
+- `DATABASE_URL`
+- `NEXT_PUBLIC_APP_URL`
+- `APP_URL`
+- `JWT_SECRET`
 
-To learn more about Next.js, take a look at the following resources:
+## Database Workflow
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- SQLite remains the local development database.
+- `npm run migrations:verify` creates an isolated temp SQLite file, precreates the empty database, runs `prisma migrate deploy`, then runs `prisma migrate status`.
+- PostgreSQL is the intended production database.
+- The checked-in SQLite migration history is kept for local verification.
+- A separate PostgreSQL migration history should be established before production deployment.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Commands
 
-## Deploy on Vercel
+```bash
+npm run migrations:verify
+npm run test:auth
+npm run lint
+npx tsc --noEmit
+npm run build
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Reminder Processor
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`npm run reminders:process` runs the CLI reminder processor. It is idempotent and should be scheduled by cron or a worker in production. No production scheduler is configured in this repository.
+
+## Production Notes
+
+- Production requires a real `DATABASE_URL` and canonical public app URL.
+- Emergency public links use `NEXT_PUBLIC_APP_URL` or `APP_URL`; `localhost` is only the local-development fallback.
+- Demo seed data is development-only and should not be auto-run in production.
+- Health is exposed at `/api/health`.
+- File metadata-only records remain a known limitation of the current application model.
+- The migration replay verifier is only for migration verification and not application runtime behavior.
+
+## Documentation
+
+- [Architecture](./docs/ARCHITECTURE.md)
+- [API Reference](./docs/API.md)
+- [Security](./docs/SECURITY.md)
+- [Deployment Runbook](./docs/DEPLOYMENT.md)
+- [PostgreSQL Migration Plan](./docs/POSTGRESQL_MIGRATION.md)
+- [Demo Guide](./docs/DEMO_GUIDE.md)
+- [Screenshot Checklist](./docs/SCREENSHOTS.md)
+- [Interview Guide](./docs/INTERVIEW_GUIDE.md)
+- [Resume Bullets](./docs/RESUME_BULLETS.md)

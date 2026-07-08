@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/src/lib/db';
 import { getSessionUser, getActiveProfile } from '@/src/lib/auth';
 import { resolveActiveProfileAccess, canUsePermission } from '@/src/lib/authorization';
+import { upsertSourceReminder } from '@/src/lib/reminders';
 
 export async function GET(req: NextRequest) {
   try {
@@ -61,6 +62,22 @@ export async function POST(req: NextRequest) {
         timestamp: timestamp ? new Date(timestamp) : new Date(),
       },
     });
+
+    if (entry.amount > 0) {
+      const scheduledAt = new Date(entry.timestamp.getTime() + 60 * 60 * 1000);
+      await upsertSourceReminder({
+        familyProfileId: activeProfile.id,
+        createdByUserId: user.id,
+        sourceType: 'HYDRATION',
+        sourceId: `hydration:${activeProfile.id}`,
+        title: 'Hydration check-in',
+        description: 'Log your next water intake when you are ready.',
+        scheduledAt,
+        recurrence: JSON.stringify({ type: 'DAILY', intervalDays: 1 }),
+        reminderType: 'HYDRATION',
+        enabled: true,
+      });
+    }
 
     return NextResponse.json(entry);
   } catch (error) {
