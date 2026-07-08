@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { ShieldAlert, Heart, Activity, ClipboardList, Share2 } from 'lucide-react';
 import { Button } from '@/src/components/ui/primitives';
+import { ThemeToggle } from '@/src/components/theme-toggle';
 
 export default function LandingPage() {
   return (
@@ -14,7 +15,8 @@ export default function LandingPage() {
           <ShieldAlert className="w-8 h-8 text-primary animate-pulse" />
           <span className="text-2xl font-extrabold tracking-tight text-gradient">WELLSYNC</span>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
+          <ThemeToggle compact />
           <Link href="/login">
             <Button variant="ghost" size="sm">Sign In</Button>
           </Link>

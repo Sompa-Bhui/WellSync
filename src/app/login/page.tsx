@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ShieldAlert } from 'lucide-react';
 import { Input, Button, Card } from '@/src/components/ui/primitives';
+import { ThemeToggle } from '@/src/components/theme-toggle';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -54,6 +55,9 @@ export default function LoginPage() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background px-4 py-12">
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6">
+        <ThemeToggle compact />
+      </div>
       <div className="flex items-center space-x-2.5 mb-8">
         <ShieldAlert className="w-10 h-10 text-primary animate-pulse" />
         <span className="text-3xl font-extrabold tracking-tight text-gradient">WELLSYNC</span>

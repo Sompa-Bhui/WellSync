@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/src/context/AuthContext';
+import { ThemeToggle } from '@/src/components/theme-toggle';
 import {
   Home,
   Apple,
@@ -98,7 +99,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       {/* 1. DESKTOP SIDEBAR */}
-      <aside className="hidden lg:flex flex-col w-64 border-r border-border/50 bg-card p-5 shrink-0">
+      <aside className="hidden lg:flex flex-col w-64 border-r border-border/70 bg-surface p-5 shrink-0">
         {/* Brand */}
         <div className="flex items-center space-x-2 pb-6 border-b border-border/40 mb-6">
           <ShieldAlert className="w-7 h-7 text-primary" />
@@ -109,7 +110,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         <div className="relative mb-6">
           <button
             onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-            className="flex items-center justify-between w-full p-2.5 rounded-lg bg-background border border-border/80 text-left hover:border-primary/50 transition-colors cursor-pointer"
+            className="flex items-center justify-between w-full p-2.5 rounded-lg bg-background border border-border/80 text-left hover:border-primary/50 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
           >
             <div className="flex flex-col min-w-0">
               <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Active Member</span>
@@ -145,7 +146,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm transition-all hover:bg-border/40 ${
+                className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm transition-all hover:bg-surface-muted ${
                   isActive
                     ? 'bg-primary/10 text-primary border-l-2 border-primary font-medium'
                     : 'text-muted-foreground hover:text-foreground'
@@ -181,12 +182,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       {/* 2. MAIN LAYOUT CONTAINER */}
       <div className="flex-1 flex flex-col min-w-0 pb-16 lg:pb-0">
         {/* Top Header */}
-        <header className="flex items-center justify-between h-16 px-4 lg:px-8 border-b border-border/50 bg-card/50 backdrop-blur-md sticky top-0 z-40">
+        <header className="flex items-center justify-between h-16 px-4 lg:px-8 border-b border-border/70 bg-background/80 backdrop-blur-md sticky top-0 z-40">
           {/* Mobile Menu Trigger & Logo */}
           <div className="flex items-center space-x-4 lg:hidden">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="text-foreground hover:text-primary cursor-pointer"
+            className="text-foreground hover:text-primary cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40 rounded-lg"
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -208,10 +209,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           {/* Action Header Items */}
           <div className="flex items-center space-x-3">
             {/* Notifications Bell */}
+            <ThemeToggle />
+
             <div className="relative">
               <button
                 onClick={() => setNotifDrawerOpen(!notifDrawerOpen)}
-                className="p-2 rounded-lg hover:bg-border/40 text-muted-foreground hover:text-foreground relative transition-colors cursor-pointer"
+                className="p-2 rounded-lg hover:bg-surface-muted text-muted-foreground hover:text-foreground relative transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
               >
                 <Bell className="w-5 h-5" />
                 {unreadCount > 0 && (
@@ -250,7 +253,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             <div className="relative lg:hidden">
               <button
                 onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                className="flex items-center space-x-1 p-2 rounded-lg hover:bg-border/40 text-sm font-semibold cursor-pointer"
+                className="flex items-center space-x-1 p-2 rounded-lg hover:bg-surface-muted text-sm font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
               >
                 <span className="max-w-[80px] truncate">{activeProfile.name}</span>
                 <ChevronDown className="w-3.5 h-3.5 shrink-0" />
@@ -293,7 +296,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       </div>
 
       {/* 3. MOBILE BOTTOM NAV */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-card border-t border-border/50 z-40 flex items-center justify-around px-2">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface border-t border-border/70 z-40 flex items-center justify-around px-2">
         <Link href="/dashboard" className={`flex flex-col items-center space-y-0.5 text-xs ${pathname === '/dashboard' ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
           <Home className="w-5 h-5" />
           <span>Home</span>
@@ -323,10 +326,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       {mobileMenuOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm cursor-pointer" onClick={() => setMobileMenuOpen(false)} />
-          <div className="relative w-64 bg-card border-r border-border p-5 flex flex-col z-10">
+          <div className="relative w-64 bg-surface border-r border-border p-5 flex flex-col z-10">
             <div className="flex items-center justify-between pb-6 border-b border-border/40 mb-6">
               <span className="text-xl font-bold tracking-tight text-gradient">WELLSYNC</span>
-              <button onClick={() => setMobileMenuOpen(false)} className="text-muted-foreground hover:text-foreground cursor-pointer">
+              <button onClick={() => setMobileMenuOpen(false)} className="text-muted-foreground hover:text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40 rounded-lg">
                 <X className="w-6 h-6" />
               </button>
             </div>

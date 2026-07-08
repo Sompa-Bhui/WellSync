@@ -18,9 +18,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     
     const variants = {
       primary: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/10',
-      secondary: 'bg-border text-foreground hover:bg-border/80 border border-border',
+      secondary: 'bg-surface-muted text-foreground hover:bg-surface-muted/80 border border-border',
       danger: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-      ghost: 'text-muted-foreground hover:text-foreground hover:bg-border/40',
+      ghost: 'text-muted-foreground hover:text-foreground hover:bg-surface-muted',
       outline: 'border border-primary text-primary hover:bg-primary/10',
     };
 
@@ -51,7 +51,7 @@ Button.displayName = 'Button';
 // CARD COMPONENT
 // ==========================================
 export const Card = ({ className = '', children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={`bg-card border border-border/60 rounded-xl shadow-lg p-5 hover:border-border transition-all ${className}`} {...props}>
+  <div className={`bg-card border border-border/60 rounded-xl shadow-lg shadow-black/5 p-5 hover:border-border transition-all ${className}`} {...props}>
     {children}
   </div>
 );
@@ -101,7 +101,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <input
         ref={ref}
         type={type}
-        className={`bg-background border border-border/80 rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all ${error ? 'border-destructive focus:ring-destructive' : ''} ${className}`}
+        className={`bg-background border border-border/80 rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all disabled:cursor-not-allowed disabled:opacity-60 ${error ? 'border-destructive focus:ring-destructive' : ''} ${className}`}
         {...props}
       />
       {error && <span className="text-xs text-destructive mt-1">{error}</span>}
@@ -122,7 +122,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
       {label && <label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">{label}</label>}
       <select
         ref={ref}
-        className={`bg-background border border-border/85 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all ${error ? 'border-destructive focus:ring-destructive' : ''} ${className}`}
+        className={`bg-background border border-border/85 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all disabled:cursor-not-allowed disabled:opacity-60 ${error ? 'border-destructive focus:ring-destructive' : ''} ${className}`}
         {...props}
       >
         {options.map((opt) => (
@@ -148,7 +148,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
       {label && <label className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">{label}</label>}
       <textarea
         ref={ref}
-        className={`bg-background border border-border/80 rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all ${error ? 'border-destructive focus:ring-destructive' : ''} ${className}`}
+        className={`bg-background border border-border/80 rounded-lg px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all disabled:cursor-not-allowed disabled:opacity-60 ${error ? 'border-destructive focus:ring-destructive' : ''} ${className}`}
         rows={3}
         {...props}
       />
@@ -177,7 +177,7 @@ export const Modal = ({ isOpen, onClose, title, children }: ModalProps) => {
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm cursor-pointer" onClick={onClose} />
       
       {/* Content */}
-      <div className="bg-card border border-border rounded-xl shadow-2xl max-w-lg w-full z-10 flex flex-col max-h-[90vh]">
+      <div className="bg-card border border-border rounded-xl shadow-2xl shadow-black/10 max-w-lg w-full z-10 flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between p-5 border-b border-border/40">
           <h3 className="text-lg font-bold text-foreground">{title}</h3>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl font-medium cursor-pointer">

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShieldAlert, Check } from 'lucide-react';
 import { Card, Input, Select, Button } from '@/src/components/ui/primitives';
+import { ThemeToggle } from '@/src/components/theme-toggle';
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -98,6 +99,9 @@ export default function OnboardingPage() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background px-4 py-8">
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6">
+        <ThemeToggle compact />
+      </div>
       <div className="flex items-center space-x-2 mb-6">
         <ShieldAlert className="w-8 h-8 text-primary" />
         <span className="text-2xl font-bold tracking-tight text-gradient">WELLSYNC</span>
