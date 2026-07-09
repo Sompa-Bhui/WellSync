@@ -1,7 +1,7 @@
 import test, { beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { prisma } from '@/src/lib/db';
-import { signToken, __setCookieStoreForTests } from '@/src/lib/auth';
+import { signToken, __setCookieStoreForTests, hashPassword } from '@/src/lib/auth';
 import { defaultPermissions } from '@/src/lib/permissions';
 
 type CookieValue = { value: string };
@@ -41,25 +41,42 @@ async function jsonResponse(res: Response) {
 async function createFixture() {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const ownerA = await prisma.user.create({
-    data: { email: `owner-a-${suffix}@example.com`, password: 'pw', name: 'Owner A' },
+    data: { email: `owner-a-${suffix}@example.com`, password: await hashPassword('pw'), name: 'Owner A' },
   });
   const ownerB = await prisma.user.create({
-    data: { email: `owner-b-${suffix}@example.com`, password: 'pw', name: 'Owner B' },
+    data: { email: `owner-b-${suffix}@example.com`, password: await hashPassword('pw'), name: 'Owner B' },
   });
   const caregiver = await prisma.user.create({
-    data: { email: `caregiver-${suffix}@example.com`, password: 'pw', name: 'Caregiver' },
+    data: { email: `caregiver-${suffix}@example.com`, password: await hashPassword('pw'), name: 'Caregiver' },
   });
   const viewer = await prisma.user.create({
-    data: { email: `viewer-${suffix}@example.com`, password: 'pw', name: 'Viewer' },
+    data: { email: `viewer-${suffix}@example.com`, password: await hashPassword('pw'), name: 'Viewer' },
   });
   const invitee = await prisma.user.create({
-    data: { email: `invited-${suffix}@example.com`, password: 'pw', name: 'Invitee' },
+    data: { email: `invited-${suffix}@example.com`, password: await hashPassword('pw'), name: 'Invitee' },
   });
   const stranger = await prisma.user.create({
-    data: { email: `stranger-${suffix}@example.com`, password: 'pw', name: 'Stranger' },
+    data: { email: `stranger-${suffix}@example.com`, password: await hashPassword('pw'), name: 'Stranger' },
   });
   const profileA = await prisma.familyProfile.create({
     data: { userId: ownerA.id, name: 'Profile A', relationship: 'SELF' },
+  });
+  await prisma.healthProfile.create({
+    data: {
+      userId: ownerA.id,
+      dateOfBirth: '1990-01-01',
+      height: 175,
+      targetWeight: 70,
+      activityLevel: 'MODERATELY_ACTIVE',
+      dietaryPreference: 'OMNIVORE',
+      allergies: 'Peanuts',
+      foodRestrictions: 'None',
+      healthGoals: 'Stay healthy',
+      sleepWakeTime: '07:00',
+      sleepBedTime: '22:30',
+      preferredUnits: 'METRIC',
+      timezone: 'Asia/Calcutta',
+    },
   });
   const profileB = await prisma.familyProfile.create({
     data: { userId: ownerB.id, name: 'Profile B', relationship: 'SELF' },
@@ -299,6 +316,19 @@ async function createFixture() {
     },
   });
 
+  const emergencyContact = await prisma.emergencyContact.create({
+    data: {
+      familyProfileId: profileA.id,
+      name: 'Primary Contact',
+      relationship: 'Spouse',
+      phone: '+1-222-333-4444',
+      alternatePhone: null,
+      priority: 1,
+      notes: 'Reach first',
+      active: true,
+    },
+  });
+
   const invitation = await prisma.careCircleInvitation.create({
     data: {
       userId: ownerA.id,
@@ -346,6 +376,7 @@ async function createFixture() {
     handoffA,
     handoffB,
     emergencyProfile,
+    emergencyContact,
     invitation,
     invitedWrongEmail,
   };
@@ -484,7 +515,15 @@ test('emergency public route limits leakage to visible fields only', async (t) =
   assert.equal(body.currentMedications, null);
   assert.equal(body.emergencyNote, null);
   assert.equal(body.id, undefined);
-  assert.deepEqual(body.contacts, []);
+  assert.deepEqual(body.contacts, [
+    {
+      name: 'Primary Contact',
+      relationship: 'Spouse',
+      phone: '+1-222-333-4444',
+      alternatePhone: null,
+      priority: 1,
+    },
+  ]);
 
   const expired = await prisma.emergencyProfile.create({
     data: {
@@ -504,6 +543,255 @@ test('emergency public route limits leakage to visible fields only', async (t) =
   const revokedRes = await callRoute('./../app/api/emergency/public/[token]/route', 'GET', `http://localhost/api/emergency/public/${revoked.token}`, {}, { token: revoked.token });
   assert.equal(expiredRes.status, 404);
   assert.equal(revokedRes.status, 404);
+});
+
+test('authenticated emergency summary is scoped to the active profile and does not reuse stale contact data', async (t) => {
+  const fixture = await createFixture();
+  t.after(() => cleanupFixture(fixture));
+
+  const token = signToken({ userId: fixture.ownerA.id, email: fixture.ownerA.email, name: fixture.ownerA.name });
+  setSession(token, fixture.profileA.id);
+
+  const resA = await callRoute('./../app/api/emergency/route', 'GET', 'http://localhost/api/emergency');
+  assert.equal(resA.status, 200);
+  const bodyA = await jsonResponse(resA);
+  assert.equal(bodyA.preferredName, 'Visible Name');
+  assert.equal(bodyA.bloodType, 'O+');
+  assert.equal(bodyA.tokenStatus, 'active');
+  assert.equal(bodyA.publicUrl, `http://localhost:3000/emergency/${fixture.emergencyProfile.token}`);
+  assert.equal(bodyA.contacts.length, 1);
+  assert.equal(bodyA.contacts[0].phone, '+1-222-333-4444');
+
+  const profileB = await prisma.familyProfile.create({
+    data: { userId: fixture.ownerA.id, name: 'Profile B2', relationship: 'SELF' },
+  });
+  await prisma.emergencyProfile.create({
+    data: {
+      familyProfileId: profileB.id,
+      preferredName: 'Second Profile',
+      bloodType: 'A-',
+      allergies: 'Shellfish',
+      criticalConditions: 'Diabetes',
+      currentMedications: 'Insulin',
+      emergencyNote: 'Second profile note',
+      publicFields: JSON.stringify(['preferredName', 'bloodType', 'contacts']),
+      token: `public-token-b-${Date.now()}`,
+      active: true,
+    },
+  });
+  await prisma.emergencyContact.create({
+    data: {
+      familyProfileId: profileB.id,
+      name: 'Second Contact',
+      relationship: 'Sibling',
+      phone: '+1-999-888-7777',
+      alternatePhone: null,
+      priority: 1,
+      notes: null,
+      active: true,
+    },
+  });
+
+  setSession(token, profileB.id);
+  const resB = await callRoute('./../app/api/emergency/route', 'GET', 'http://localhost/api/emergency');
+  assert.equal(resB.status, 200);
+  const bodyB = await jsonResponse(resB);
+  assert.equal(bodyB.preferredName, 'Second Profile');
+  assert.equal(bodyB.bloodType, 'A-');
+  assert.equal(bodyB.contacts.length, 1);
+  assert.equal(bodyB.contacts[0].phone, '+1-999-888-7777');
+  assert.notEqual(bodyB.publicUrl, bodyA.publicUrl);
+
+  setSession(token, fixture.profileA.id);
+  const revokedProfile = await prisma.emergencyProfile.update({
+    where: { familyProfileId: fixture.profileA.id },
+    data: { active: false },
+  });
+  const revokedRes = await callRoute('./../app/api/emergency/route', 'GET', 'http://localhost/api/emergency');
+  assert.equal(revokedRes.status, 200);
+  const revokedBody = await jsonResponse(revokedRes);
+  assert.equal(revokedBody.tokenStatus, 'revoked');
+  assert.equal(revokedBody.publicUrl, `http://localhost:3000/emergency/${revokedProfile.token}`);
+
+  await prisma.$transaction([
+    prisma.emergencyContact.deleteMany({ where: { familyProfileId: profileB.id } }),
+    prisma.emergencyProfile.deleteMany({ where: { familyProfileId: profileB.id } }),
+    prisma.familyProfile.delete({ where: { id: profileB.id } }),
+  ]);
+});
+
+test('emergency summary follows the current active profile without stale cross-profile leakage', async (t) => {
+  const fixture = await createFixture();
+  t.after(() => cleanupFixture(fixture));
+
+  const token = signToken({ userId: fixture.ownerA.id, email: fixture.ownerA.email, name: fixture.ownerA.name });
+  setSession(token, fixture.profileA.id);
+
+  const profileB = await prisma.familyProfile.create({
+    data: { userId: fixture.ownerA.id, name: 'Profile B2', relationship: 'SELF' },
+  });
+  const profileC = await prisma.familyProfile.create({
+    data: { userId: fixture.ownerA.id, name: 'Profile C', relationship: 'SELF' },
+  });
+
+  const emergencyA = await prisma.emergencyProfile.update({
+    where: { familyProfileId: fixture.profileA.id },
+    data: {
+      preferredName: 'Alpha',
+      bloodType: 'O-',
+      allergies: 'Peanuts',
+      criticalConditions: 'Asthma',
+      currentMedications: 'Inhaler',
+      publicFields: JSON.stringify(['preferredName', 'bloodType', 'contacts']),
+      active: true,
+    },
+  });
+  const emergencyB = await prisma.emergencyProfile.create({
+    data: {
+      familyProfileId: profileB.id,
+      preferredName: 'Beta',
+      bloodType: 'AB+',
+      allergies: 'Shellfish',
+      criticalConditions: 'Diabetes',
+      currentMedications: 'Insulin',
+      publicFields: JSON.stringify(['preferredName', 'bloodType', 'contacts']),
+      token: `beta-token-${Date.now()}`,
+      active: true,
+    },
+  });
+
+  const contactA = await prisma.emergencyContact.update({
+    where: { id: fixture.emergencyContact.id },
+    data: {
+      name: 'Alpha Contact',
+      relationship: 'Spouse',
+      phone: '+1-111-111-1111',
+      alternatePhone: null,
+      priority: 1,
+      notes: null,
+      active: true,
+    },
+  });
+  const contactB = await prisma.emergencyContact.create({
+    data: {
+      familyProfileId: profileB.id,
+      name: 'Beta Contact',
+      relationship: 'Sibling',
+      phone: '+1-222-222-2222',
+      alternatePhone: null,
+      priority: 1,
+      notes: null,
+      active: true,
+    },
+  });
+
+  await callRoute('./../app/api/emergency/public/[token]/route', 'GET', `http://localhost/api/emergency/public/${emergencyA.token}`, {}, { token: emergencyA.token });
+
+  const resA = await callRoute('./../app/api/emergency/route', 'GET', 'http://localhost/api/emergency');
+  assert.equal(resA.status, 200);
+  const bodyA = await jsonResponse(resA);
+  assert.equal(bodyA.bloodType, 'O-');
+  assert.equal(bodyA.allergies, 'Peanuts');
+  assert.equal(bodyA.contacts.length, 1);
+  assert.equal(bodyA.contacts[0].id, contactA.id);
+  assert.equal(bodyA.contacts[0].phone, '+1-111-111-1111');
+  assert.ok(bodyA.accessLogs.length >= 1);
+  assert.ok(bodyA.accessLogs.some((entry: { tokenRef: string }) => entry.tokenRef === emergencyA.token.slice(0, 12)));
+  assert.equal(bodyA.preferredName, 'Alpha');
+  assert.equal(bodyA.publicUrl, `http://localhost:3000/emergency/${emergencyA.token}`);
+  assert.ok(!JSON.stringify(bodyA).includes('Beta Contact'));
+
+  const switchRes = await callRoute('./../app/api/family/active/route', 'POST', 'http://localhost/api/family/active', {
+    method: 'POST',
+    body: JSON.stringify({ profileId: profileB.id }),
+  });
+  assert.equal(switchRes.status, 200);
+
+  await callRoute('./../app/api/emergency/public/[token]/route', 'GET', `http://localhost/api/emergency/public/${emergencyB.token}`, {}, { token: emergencyB.token });
+
+  const resB = await callRoute('./../app/api/emergency/route', 'GET', 'http://localhost/api/emergency');
+  assert.equal(resB.status, 200);
+  const bodyB = await jsonResponse(resB);
+  assert.equal(bodyB.bloodType, 'AB+');
+  assert.equal(bodyB.allergies, 'Shellfish');
+  assert.equal(bodyB.contacts.length, 1);
+  assert.equal(bodyB.contacts[0].id, contactB.id);
+  assert.equal(bodyB.contacts[0].phone, '+1-222-222-2222');
+  assert.ok(bodyB.accessLogs.length >= 1);
+  assert.ok(bodyB.accessLogs.some((entry: { tokenRef: string }) => entry.tokenRef === emergencyB.token.slice(0, 12)));
+  assert.equal(bodyB.preferredName, 'Beta');
+  assert.equal(bodyB.publicUrl, `http://localhost:3000/emergency/${emergencyB.token}`);
+  assert.ok(!JSON.stringify(bodyB).includes('Alpha Contact'));
+
+  const unauthorizedSwitch = await callRoute('./../app/api/family/active/route', 'POST', 'http://localhost/api/family/active', {
+    method: 'POST',
+    body: JSON.stringify({ profileId: fixture.profileB.id }),
+  });
+  assert.equal(unauthorizedSwitch.status, 404);
+
+  setSession(token, profileC.id);
+  const missingRes = await callRoute('./../app/api/emergency/route', 'GET', 'http://localhost/api/emergency');
+  assert.equal(missingRes.status, 200);
+  const missingBody = await jsonResponse(missingRes);
+  assert.equal(missingBody, null);
+
+  await prisma.$transaction([
+    prisma.emergencyContact.deleteMany({ where: { familyProfileId: { in: [fixture.profileA.id, profileB.id] } } }),
+    prisma.emergencyProfile.deleteMany({ where: { familyProfileId: { in: [fixture.profileA.id, profileB.id] } } }),
+    prisma.familyProfile.deleteMany({ where: { id: { in: [profileB.id, profileC.id] } } }),
+  ]);
+});
+
+test('account profile endpoints update only the authenticated user and do not leak password hashes', async (t) => {
+  const fixture = await createFixture();
+  t.after(() => cleanupFixture(fixture));
+
+  const token = signToken({ userId: fixture.ownerA.id, email: fixture.ownerA.email, name: fixture.ownerA.name });
+  setSession(token, fixture.profileA.id);
+
+  const meRes = await callRoute('./../app/api/auth/me/route', 'GET', 'http://localhost/api/auth/me');
+  assert.equal(meRes.status, 200);
+  const meBody = await jsonResponse(meRes);
+  assert.equal(meBody.user.email, fixture.ownerA.email);
+  assert.equal(meBody.user.password, undefined);
+
+  const patchRes = await callRoute('./../app/api/auth/me/route', 'PATCH', 'http://localhost/api/auth/me', {
+    method: 'PATCH',
+    body: JSON.stringify({ name: 'Updated Owner' }),
+  });
+  assert.equal(patchRes.status, 200);
+  const patchBody = await jsonResponse(patchRes);
+  assert.equal(patchBody.user.name, 'Updated Owner');
+
+  const profileRes = await callRoute('./../app/api/profile/route', 'PATCH', 'http://localhost/api/profile', {
+    method: 'PATCH',
+    body: JSON.stringify({ dateOfBirth: '1990-01-01', height: 180, timezone: 'Asia/Calcutta' }),
+  });
+  assert.equal(profileRes.status, 200);
+  const profileBody = await jsonResponse(profileRes);
+  assert.equal(profileBody.dateOfBirth, '1990-01-01');
+  assert.equal(profileBody.height, 180);
+  assert.equal(profileBody.timezone, 'Asia/Calcutta');
+});
+
+test('password change rejects invalid current password and accepts the correct one', async (t) => {
+  const fixture = await createFixture();
+  t.after(() => cleanupFixture(fixture));
+
+  const token = signToken({ userId: fixture.ownerA.id, email: fixture.ownerA.email, name: fixture.ownerA.name });
+  setSession(token, fixture.profileA.id);
+
+  const rejected = await callRoute('./../app/api/auth/password/route', 'POST', 'http://localhost/api/auth/password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword: 'wrong', newPassword: 'newpass123', confirmPassword: 'newpass123' }),
+  });
+  assert.equal(rejected.status, 400);
+
+  const accepted = await callRoute('./../app/api/auth/password/route', 'POST', 'http://localhost/api/auth/password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword: 'pw', newPassword: 'newpass123', confirmPassword: 'newpass123' }),
+  });
+  assert.equal(accepted.status, 200);
 });
 
 test('care circle invitation abuse is denied safely', async (t) => {

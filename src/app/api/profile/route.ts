@@ -113,3 +113,55 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const healthProfile = await prisma.healthProfile.findUnique({ where: { userId: user.id } });
+    if (!healthProfile) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    }
+
+    const updated = await prisma.healthProfile.update({
+      where: { userId: user.id },
+      data: {
+        dateOfBirth: body.dateOfBirth ?? healthProfile.dateOfBirth,
+        height: body.height === undefined || body.height === '' ? healthProfile.height : parseFloat(body.height),
+        targetWeight: body.targetWeight === undefined || body.targetWeight === '' ? healthProfile.targetWeight : parseFloat(body.targetWeight),
+        activityLevel: body.activityLevel ?? healthProfile.activityLevel,
+        dietaryPreference: body.dietaryPreference ?? healthProfile.dietaryPreference,
+        allergies: body.allergies ?? healthProfile.allergies,
+        foodRestrictions: body.foodRestrictions ?? healthProfile.foodRestrictions,
+        healthGoals: body.healthGoals ?? healthProfile.healthGoals,
+        sleepWakeTime: body.sleepWakeTime ?? healthProfile.sleepWakeTime,
+        sleepBedTime: body.sleepBedTime ?? healthProfile.sleepBedTime,
+        preferredUnits: body.preferredUnits ?? healthProfile.preferredUnits,
+        timezone: body.timezone ?? healthProfile.timezone,
+      },
+    });
+
+    const selfProfile = await prisma.familyProfile.findFirst({
+      where: { userId: user.id, relationship: 'SELF' },
+    });
+    if (selfProfile) {
+      await prisma.familyProfile.update({
+        where: { id: selfProfile.id },
+        data: {
+          allergies: updated.allergies || selfProfile.allergies,
+          foodRestrictions: updated.foodRestrictions || selfProfile.foodRestrictions,
+          dietaryPreference: updated.dietaryPreference || selfProfile.dietaryPreference,
+        },
+      });
+    }
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error('Profile PATCH error:', error);
+    return NextResponse.json({ error: 'Internal server error occurred' }, { status: 500 });
+  }
+}

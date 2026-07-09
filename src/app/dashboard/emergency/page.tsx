@@ -4,18 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import DashboardShell from '@/src/components/DashboardShell';
 import EmergencyQr from '@/src/components/emergency/EmergencyQr';
 import { Button, Card, Input, Textarea } from '@/src/components/ui/primitives';
-import { Check, Plus, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
-
-type EmergencyContact = {
-  id: string;
-  name: string;
-  relationship: string;
-  phone: string;
-  alternatePhone: string | null;
-  priority: number;
-  notes: string | null;
-  active: boolean;
-};
+import { Check, RefreshCw, ShieldAlert } from 'lucide-react';
 
 type EmergencyData = {
   preferredName: string | null;
@@ -31,7 +20,6 @@ type EmergencyData = {
   token: string | null;
   tokenStatus: 'active' | 'revoked' | 'expired' | 'missing';
   publicUrl: string | null;
-  contacts: EmergencyContact[];
   accessLogs: Array<{ timestamp: string; tokenRef: string }>;
 } | null;
 
@@ -67,39 +55,63 @@ function formatTimestamp(value: string) {
 
 export default function EmergencyDashboardPage() {
   const [data, setData] = useState<EmergencyData>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [contact, setContact] = useState({ name: '', relationship: '', phone: '', alternatePhone: '', priority: '1', notes: '', active: true });
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
+  const loadRequestId = React.useRef(0);
+  const loadAbortRef = React.useRef<AbortController | null>(null);
 
   const load = async () => {
-    const result = await (await fetch('/api/emergency')).json();
-    setData(result);
-    setForm({
-      preferredName: result?.preferredName ?? '',
-      dateOfBirth: result?.dateOfBirth ?? '',
-      bloodType: result?.bloodType ?? '',
-      allergies: result?.allergies ?? '',
-      criticalConditions: result?.criticalConditions ?? '',
-      currentMedications: result?.currentMedications ?? '',
-      primaryDoctor: result?.primaryDoctor ?? '',
-      insuranceNote: result?.insuranceNote ?? '',
-      emergencyNote: result?.emergencyNote ?? '',
-      publicFields: (() => {
-        try {
-          const parsed = JSON.parse(result?.publicFields || '[]');
-          return Array.isArray(parsed) && parsed.length ? parsed : EMPTY_FORM.publicFields;
-        } catch {
-          return EMPTY_FORM.publicFields;
-        }
-      })(),
-    });
+    const requestId = ++loadRequestId.current;
+    loadAbortRef.current?.abort();
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/emergency', { signal: controller.signal });
+      const result = await response.json();
+      if (controller.signal.aborted || requestId !== loadRequestId.current) return;
+      setError(null);
+      setData(result);
+      setForm({
+        preferredName: result?.preferredName ?? '',
+        dateOfBirth: result?.dateOfBirth ?? '',
+        bloodType: result?.bloodType ?? '',
+        allergies: result?.allergies ?? '',
+        criticalConditions: result?.criticalConditions ?? '',
+        currentMedications: result?.currentMedications ?? '',
+        primaryDoctor: result?.primaryDoctor ?? '',
+        insuranceNote: result?.insuranceNote ?? '',
+        emergencyNote: result?.emergencyNote ?? '',
+        publicFields: (() => {
+          try {
+            const parsed = JSON.parse(result?.publicFields || '[]');
+            return Array.isArray(parsed) && parsed.length ? parsed : EMPTY_FORM.publicFields;
+          } catch {
+            return EMPTY_FORM.publicFields;
+          }
+        })(),
+      });
+    } catch (error) {
+      if (controller.signal.aborted || requestId !== loadRequestId.current) return;
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      setError(error instanceof Error ? error.message : 'Emergency profile unavailable');
+    } finally {
+      if (requestId === loadRequestId.current && loadAbortRef.current === controller) {
+        loadAbortRef.current = null;
+        setLoading(false);
+      }
+    }
   };
 
   useEffect(() => {
-    void (async () => {
-      await load();
-    })();
+    void Promise.resolve().then(() => load());
+    return () => {
+      loadAbortRef.current?.abort();
+    };
   }, []);
 
   const publicFieldSet = useMemo(() => new Set(form.publicFields), [form.publicFields]);
@@ -130,44 +142,12 @@ export default function EmergencyDashboardPage() {
     await load();
   };
 
-  const addContact = async () => {
-    await fetch('/api/emergency/contacts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(contact),
-    });
-    setContact({ name: '', relationship: '', phone: '', alternatePhone: '', priority: '1', notes: '', active: true });
-    await load();
-  };
-
-  const updateContact = async (id: string, patch: Partial<EmergencyContact>) => {
-    await fetch(`/api/emergency/contacts/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-    await load();
-  };
-
-  const deleteContact = async (id: string) => {
-    await fetch(`/api/emergency/contacts/${id}`, { method: 'DELETE' });
-    await load();
-  };
-
   const copyLink = async () => {
     if (!data?.publicUrl) return;
     await navigator.clipboard.writeText(data.publicUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
-
-  if (!data) {
-    return (
-      <DashboardShell>
-        <Card className="animate-pulse p-8">Loading emergency profile...</Card>
-      </DashboardShell>
-    );
-  }
 
   return (
     <DashboardShell>
@@ -187,6 +167,28 @@ export default function EmergencyDashboardPage() {
             </Button>
           </div>
         </div>
+
+        {error ? (
+          <Card className="space-y-3 p-6">
+            <p className="text-sm font-semibold text-amber-500">Emergency profile unavailable</p>
+            <p className="text-sm text-muted-foreground">{error}</p>
+            <Button variant="secondary" size="sm" onClick={() => void load()}>
+              Retry
+            </Button>
+          </Card>
+        ) : null}
+
+        {loading ? (
+          <Card className="space-y-4 p-6">
+            <div className="h-6 w-44 animate-pulse rounded bg-border/60" />
+            <div className="h-4 w-72 animate-pulse rounded bg-border/50" />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="h-32 animate-pulse rounded-xl border border-border/60 bg-muted/20" />
+              <div className="h-32 animate-pulse rounded-xl border border-border/60 bg-muted/20" />
+            </div>
+            <div className="h-64 animate-pulse rounded-xl border border-border/60 bg-muted/20" />
+          </Card>
+        ) : null}
 
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] print:grid-cols-1">
           <Card className="space-y-5">
@@ -241,75 +243,32 @@ export default function EmergencyDashboardPage() {
                 <h2 className="text-lg font-bold">Token and QR</h2>
                 <p className="text-sm text-muted-foreground">Status, share link, and printable card.</p>
               </div>
-              <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold uppercase tracking-wide">
-                {data.tokenStatus}
-              </span>
-            </div>
-            <EmergencyQr publicUrl={data.publicUrl} tokenStatus={data.tokenStatus} onCopy={() => void copyLink()} onPrint={() => window.print()} />
-            {copied ? <p className="text-xs text-emerald-400">Public link copied.</p> : null}
-            <div className="rounded-xl border border-border bg-muted/20 p-3 text-sm">
-              <div className="font-semibold">Recent access</div>
-              <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                {data.accessLogs.length > 0 ? data.accessLogs.map((entry) => <div key={`${entry.timestamp}-${entry.tokenRef}`}>{formatTimestamp(entry.timestamp)}</div>) : <div>No access yet.</div>}
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr] print:grid-cols-1">
-          <Card className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold">Emergency contacts</h2>
-              <span className="text-xs text-muted-foreground">{data.contacts.length} contacts</span>
-            </div>
-            <div className="grid gap-3">
-              <Input label="Name" value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} />
-              <Input label="Relationship" value={contact.relationship} onChange={(e) => setContact({ ...contact, relationship: e.target.value })} />
-              <Input label="Phone" value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} />
-              <Input label="Alternate phone" value={contact.alternatePhone} onChange={(e) => setContact({ ...contact, alternatePhone: e.target.value })} />
-              <Input label="Priority" type="number" value={contact.priority} onChange={(e) => setContact({ ...contact, priority: e.target.value })} />
-              <Textarea label="Notes" value={contact.notes} onChange={(e) => setContact({ ...contact, notes: e.target.value })} />
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={contact.active} onChange={(e) => setContact({ ...contact, active: e.target.checked })} />
-                Active contact
-              </label>
-              <Button onClick={() => void addContact()}>
-                <Plus className="mr-2 h-4 w-4" /> Add contact
-              </Button>
-            </div>
-          </Card>
-
-          <Card className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold">Saved contacts</h2>
-              <span className="text-xs text-muted-foreground">Minimum disclosure only</span>
-            </div>
-            <div className="space-y-3">
-              {data.contacts.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">No contacts yet.</div>
+              {data ? (
+                <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold uppercase tracking-wide">
+                  {data.tokenStatus}
+                </span>
               ) : (
-                data.contacts.map((entry) => (
-                  <div key={entry.id} className="rounded-xl border border-border p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-semibold">{entry.name}</div>
-                        <div className="text-xs text-muted-foreground">{entry.relationship} · Priority {entry.priority} · {entry.active ? 'Active' : 'Inactive'}</div>
-                        <div className="mt-2 text-sm">{entry.phone}{entry.alternatePhone ? ` · ${entry.alternatePhone}` : ''}</div>
-                        {entry.notes ? <div className="mt-2 text-xs text-muted-foreground">{entry.notes}</div> : null}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant="secondary" size="sm" onClick={() => void updateContact(entry.id, { active: !entry.active })}>
-                          {entry.active ? 'Disable' : 'Enable'}
-                        </Button>
-                        <Button variant="secondary" size="sm" onClick={() => void deleteContact(entry.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))
+                <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold uppercase tracking-wide">
+                  missing
+                </span>
               )}
             </div>
+            {data ? (
+              <>
+                <EmergencyQr publicUrl={data.publicUrl} tokenStatus={data.tokenStatus} onCopy={() => void copyLink()} onPrint={() => window.print()} />
+                {copied ? <p className="text-xs text-emerald-400">Public link copied.</p> : null}
+                <div className="rounded-xl border border-border bg-muted/20 p-3 text-sm">
+                  <div className="font-semibold">Recent access</div>
+                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    {data.accessLogs.length > 0 ? data.accessLogs.map((entry) => <div key={`${entry.timestamp}-${entry.tokenRef}`}>{formatTimestamp(entry.timestamp)}</div>) : <div>No access yet.</div>}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">
+                No emergency profile is configured yet. Save the form to create one and generate a public emergency card.
+              </div>
+            )}
           </Card>
         </div>
       </div>

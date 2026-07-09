@@ -55,8 +55,8 @@
   --accent: #2b72d6;
   --accent-foreground: #ffffff;
 
-  --muted: #dce6f1;
-  --muted-foreground: #516273;
+  --muted: #d7e2ee;
+  --muted-foreground: #4b5d70;
   --destructive: #d33b3b;
   --destructive-foreground: #ffffff;
   --success: #16845f;
@@ -64,8 +64,8 @@
   --warning: #b46b00;
   --warning-foreground: #ffffff;
 
-  --border: #d4deea;
-  --input: #c6d2e1;
+  --border: #cfd9e5;
+  --input: #c4d0dd;
   --ring: #0f9f92;
 }
 

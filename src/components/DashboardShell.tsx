@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/src/context/AuthContext';
 import { ThemeToggle } from '@/src/components/theme-toggle';
+import EmergencyQr from '@/src/components/emergency/EmergencyQr';
 import {
   Home,
   Apple,
@@ -22,20 +23,61 @@ import {
   ListTodo,
   LogOut,
   ChevronDown,
+  ChevronRight,
   Menu,
   X,
-  Loader2
+  Loader2,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 import { Modal, Button } from '@/src/components/ui/primitives';
+
+type EmergencyContact = {
+  id: string;
+  name: string;
+  relationship: string;
+  phone: string;
+  alternatePhone: string | null;
+  priority: number;
+  active: boolean;
+};
+
+type EmergencyData = {
+  preferredName: string | null;
+  bloodType: string | null;
+  allergies: string | null;
+  criticalConditions: string | null;
+  currentMedications: string | null;
+  emergencyNote: string | null;
+  tokenStatus: 'active' | 'revoked' | 'expired' | 'missing';
+  publicUrl: string | null;
+  contacts: EmergencyContact[];
+} | null;
+
+function formatEmergencyValue(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : 'Not provided';
+}
+
+function splitEmergencyList(value: string | null | undefined) {
+  return (value ?? '')
+    .split(/[\n,;]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, activeProfile, familyProfiles, switchProfile, logout, isLoading } = useAuth();
   const pathname = usePathname();
+  const normalizedPathname = pathname.replace(/\/$/, '') || '/';
   const activeProfileId = activeProfile?.id ?? '';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [notifDrawerOpen, setNotifDrawerOpen] = useState(false);
   const [emergencyOpen, setEmergencyOpen] = useState(false);
+  const [emergencyData, setEmergencyData] = useState<EmergencyData>(null);
+  const [emergencyLoading, setEmergencyLoading] = useState(false);
+  const [emergencyError, setEmergencyError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<{ id: string; title: string; message: string; unread: boolean; timestamp: string }[]>([]);
 
   useEffect(() => {
@@ -62,6 +104,41 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       mounted = false;
     };
   }, [activeProfileId]);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!emergencyOpen) return;
+
+    const loadEmergency = async () => {
+      setEmergencyLoading(true);
+      setEmergencyError(null);
+      try {
+        const response = await fetch('/api/emergency');
+        if (!mounted) return;
+        if (response.status === 404) {
+          setEmergencyData(null);
+          return;
+        }
+        if (!response.ok) {
+          throw new Error(`Emergency profile request failed (${response.status})`);
+        }
+        const data = await response.json();
+        if (!mounted) return;
+        setEmergencyData(data);
+      } catch (error) {
+        if (!mounted) return;
+        setEmergencyData(null);
+        setEmergencyError(error instanceof Error ? error.message : 'Emergency profile unavailable');
+      } finally {
+        if (mounted) setEmergencyLoading(false);
+      }
+    };
+
+    void loadEmergency();
+    return () => {
+      mounted = false;
+    };
+  }, [activeProfileId, emergencyOpen]);
 
   if (isLoading || !user || !activeProfile) {
     return (
@@ -95,6 +172,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
   const unreadCount = notifications.filter(n => n.unread).length;
   const isSharedContext = activeProfile.relationship !== 'SELF';
+  const userInitials = user.name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -141,7 +224,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         <nav className="flex-1 space-y-1.5 overflow-y-auto pr-1">
           {menuItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href;
+            const isActive = normalizedPathname === item.href;
             return (
               <Link
                 key={item.name}
@@ -168,14 +251,24 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             <ShieldAlert className="w-4 h-4 shrink-0" />
             <span className="font-semibold">Emergency Card</span>
           </button>
-          
-          <button
-            onClick={logout}
-            className="flex items-center w-full space-x-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all cursor-pointer"
+
+          <Link
+            href="/dashboard/profile"
+            className="flex w-full items-center justify-between gap-3 rounded-lg border border-border/80 bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary/50 hover:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-primary/40"
           >
-            <LogOut className="w-4 h-4" />
-            <span>Sign Out</span>
-          </button>
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                  {userInitials || 'U'}
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate font-semibold text-foreground">{user.name}</div>
+                  <div className="truncate text-xs text-muted-foreground">{user.email}</div>
+                </div>
+              </div>
+              <span className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground">
+                <ChevronRight className="h-4 w-4 opacity-70" />
+              </span>
+          </Link>
         </div>
       </aside>
 
@@ -189,8 +282,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="text-foreground hover:text-primary cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40 rounded-lg"
             >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
+                {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              </button>
             <span className="text-lg font-bold tracking-tight text-gradient">WELLSYNC</span>
           </div>
 
@@ -336,7 +429,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             <nav className="flex-grow space-y-1.5 overflow-y-auto">
               {menuItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href;
+                const isActive = normalizedPathname === item.href;
                 return (
                   <Link
                     key={item.name}
@@ -371,82 +464,132 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       {/* 5. EMERGENCY QUICK PANEL MODAL */}
       <Modal isOpen={emergencyOpen} onClose={() => setEmergencyOpen(false)} title="Emergency Health Card">
         <div className="space-y-4">
-          <div className="bg-red-950/20 border border-red-900/30 p-4 rounded-lg flex items-center space-x-4">
-            <ShieldAlert className="w-8 h-8 text-red-500 shrink-0" />
+          <div className="rounded-lg border border-red-900/30 bg-red-950/20 p-4 flex items-center gap-4 dark:bg-red-950/30">
+            <ShieldAlert className="w-8 h-8 shrink-0 text-red-500" />
             <div>
               <p className="text-sm font-semibold text-red-400">Critical Medical Disclosure</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                This panel shows only critical alerts, allergies, and contacts. Access can be shared with first responders.
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Authenticated emergency summary for the active profile. Only saved emergency fields are shown here.
               </p>
             </div>
           </div>
 
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Blood Group</span>
-                <p className="text-lg font-bold text-foreground">O + (Positive)</p>
-              </div>
-              <div>
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Emergency Contact</span>
-                <p className="text-sm font-semibold text-foreground">Emma Sompa (Spouse)</p>
-                <p className="text-xs text-muted-foreground">+1-555-0911</p>
-              </div>
+          {emergencyLoading ? (
+            <div className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+              <div className="h-5 w-32 animate-pulse rounded bg-border/60" />
+              <div className="h-4 w-full animate-pulse rounded bg-border/50" />
+              <div className="h-4 w-5/6 animate-pulse rounded bg-border/50" />
+              <div className="h-52 animate-pulse rounded-2xl border border-border/60 bg-border/30" />
             </div>
-
-            <div className="border-t border-border/40 pt-3">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Confirmed Allergies</span>
-              <p className="text-sm font-semibold text-red-400">Peanuts, Penicillin (Severe Anaphylaxis risk)</p>
-            </div>
-
-            <div className="border-t border-border/40 pt-3">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Configured Conditions</span>
-              <p className="text-sm font-semibold text-foreground">Mild chronic blood pressure variance</p>
-            </div>
-
-            <div className="border-t border-border/40 pt-3">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Active Medications</span>
-              <p className="text-sm text-foreground">None daily (except over-the-counter Multivitamins)</p>
-            </div>
-
-            <div className="border-t border-border/40 pt-3">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Important Notes</span>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Carries peanut allergen auto-injector (EpiPen) in backpack at all times.
-              </p>
-            </div>
-
-            {/* QR Scanner Simulation */}
-            <div className="border-t border-border/40 pt-4 flex flex-col items-center text-center">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">QR Code Access Token</span>
-              <div className="bg-white p-3 rounded-lg flex items-center justify-center border border-border">
-                {/* Mock QR using Lucide Qrcode */}
-                <div className="w-32 h-32 text-black flex items-center justify-center">
-                  <div className="relative w-full h-full flex flex-col justify-between p-1">
-                    <div className="flex justify-between">
-                      <div className="w-6 h-6 border-4 border-black"></div>
-                      <div className="w-6 h-6 border-4 border-black"></div>
-                    </div>
-                    <div className="self-center font-mono font-bold text-[10px] uppercase text-slate-800 tracking-wider">WELLSYNC EMERGENCY</div>
-                    <div className="flex justify-between">
-                      <div className="w-6 h-6 border-4 border-black"></div>
-                      <div className="w-6 h-6 border-4 border-black border-dashed"></div>
-                    </div>
-                  </div>
+          ) : emergencyError ? (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200 dark:text-amber-100">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  <p className="font-semibold">Emergency profile unavailable</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{emergencyError}</p>
                 </div>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-2 max-w-xs">
-                First responders can scan this code to view the revocable emergency disclosure profile securely.
-              </p>
-              <Link
-                href={`/emergency/tok_sompa_secure_emergency_access_key_xyz_789`}
-                target="_blank"
-                className="mt-3 text-xs text-primary font-semibold hover:underline"
-              >
-                View Public Emergency Card Page
-              </Link>
             </div>
-          </div>
+          ) : !emergencyData ? (
+            <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 p-5 text-sm text-muted-foreground">
+              No emergency profile is configured for the active profile yet.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-xl border border-border/60 bg-background p-4">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Blood Group</span>
+                  <p className="mt-1 text-lg font-bold text-foreground">{formatEmergencyValue(emergencyData.bloodType)}</p>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-background p-4">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Emergency Contact</span>
+                  {emergencyData.contacts.filter((contact) => contact.active).length > 0 ? (
+                    <div className="mt-1 space-y-2">
+                      {emergencyData.contacts
+                        .filter((contact) => contact.active)
+                        .slice(0, 2)
+                        .map((contact) => (
+                          <div key={contact.id} className="space-y-0.5">
+                            <p className="text-sm font-semibold text-foreground">{contact.name}</p>
+                            <p className="text-xs text-muted-foreground">{contact.relationship}</p>
+                            <p className="text-xs text-muted-foreground">{contact.phone}</p>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-sm text-muted-foreground">Not provided</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="border-t border-border/60 pt-3">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Confirmed Allergies</span>
+                  <p className="mt-1 text-sm font-semibold text-red-400">
+                    {splitEmergencyList(emergencyData.allergies).length > 0 ? splitEmergencyList(emergencyData.allergies).join(', ') : 'Not provided'}
+                  </p>
+                </div>
+
+                <div className="border-t border-border/60 pt-3">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Critical Conditions</span>
+                  <p className="mt-1 text-sm font-semibold text-foreground">
+                    {formatEmergencyValue(emergencyData.criticalConditions)}
+                  </p>
+                </div>
+
+                <div className="border-t border-border/60 pt-3">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Active Medications</span>
+                  <p className="mt-1 text-sm text-foreground">
+                    {formatEmergencyValue(emergencyData.currentMedications)}
+                  </p>
+                </div>
+
+                <div className="border-t border-border/60 pt-3">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Important Notes</span>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {formatEmergencyValue(emergencyData.emergencyNote)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-border/60 pt-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Emergency QR</span>
+                    <p className="text-xs text-muted-foreground">Encodes the active public emergency URL only.</p>
+                  </div>
+                  <Button variant="secondary" size="sm" onClick={() => void (async () => {
+                    setEmergencyLoading(true);
+                    try {
+                      const response = await fetch('/api/emergency');
+                      if (response.ok) setEmergencyData(await response.json());
+                    } finally {
+                      setEmergencyLoading(false);
+                    }
+                  })()}>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Refresh
+                  </Button>
+                </div>
+                <EmergencyQr
+                  publicUrl={emergencyData.publicUrl}
+                  tokenStatus={emergencyData.tokenStatus}
+                  onCopy={async () => {
+                    if (!emergencyData.publicUrl) return;
+                    await navigator.clipboard.writeText(emergencyData.publicUrl);
+                  }}
+                  onPrint={() => window.print()}
+                />
+                <div className="mt-3 rounded-xl border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">
+                  <p className="font-medium text-foreground">Profile scope</p>
+                  <p className="mt-1">
+                    This modal shows owner-authorized emergency details for the currently active profile. Public-enabled visibility still governs the public emergency page at {emergencyData.publicUrl ? <a href={emergencyData.publicUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">{emergencyData.publicUrl}</a> : 'the public page'}.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end pt-2">
             <Button variant="secondary" size="sm" onClick={() => setEmergencyOpen(false)}>

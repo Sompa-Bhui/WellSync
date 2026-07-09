@@ -21,22 +21,29 @@ export async function GET() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const active = await getActiveProfile(user.id);
-  const access = await resolveActiveProfileAccess(user.id);
+  const access = await resolveActiveProfileAccess(user.id, active);
   if (!canUsePermission(access, 'dashboard.summary.view')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  const profile = await prisma.emergencyProfile.findUnique({
-    where: { familyProfileId: active.id },
-    include: {
-      contacts: { orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }] },
-      accessLogs: { orderBy: { timestamp: 'desc' }, take: 10 },
-    },
-  });
+  const [profile, contacts] = await Promise.all([
+    prisma.emergencyProfile.findUnique({
+      where: { familyProfileId: active.id },
+    }),
+    prisma.emergencyContact.findMany({
+      where: { familyProfileId: active.id },
+      orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+    }),
+  ]);
+  const accessLogs = profile ? await prisma.emergencyAccessLog.findMany({
+    where: { familyProfileId: active.id, emergencyProfileId: profile.id },
+    orderBy: { timestamp: 'desc' },
+    take: 10,
+  }) : [];
   if (!profile) return NextResponse.json(null);
   return NextResponse.json({
     ...profile,
     token: profile.token,
     tokenStatus: getEmergencyTokenStatus(profile),
     publicUrl: getPublicEmergencyUrl(profile.token),
-    contacts: profile.contacts.map((contact) => ({
+    contacts: contacts.map((contact) => ({
       id: contact.id,
       name: contact.name,
       relationship: contact.relationship,
@@ -46,7 +53,7 @@ export async function GET() {
       notes: contact.notes,
       active: contact.active,
     })),
-    accessLogs: profile.accessLogs.map((entry) => ({
+    accessLogs: accessLogs.map((entry) => ({
       timestamp: entry.timestamp,
       tokenRef: entry.tokenRef,
     })),
@@ -56,9 +63,9 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const access = await resolveActiveProfileAccess(user.id);
-  if (!access || access.accessType !== 'owner') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const active = await getActiveProfile(user.id);
+  const access = await resolveActiveProfileAccess(user.id, active);
+  if (!access || access.accessType !== 'owner') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const body = await req.json();
   const created = await prisma.emergencyProfile.upsert({
     where: { familyProfileId: active.id },

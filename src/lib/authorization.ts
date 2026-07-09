@@ -2,9 +2,9 @@ import { prisma } from './db';
 import { getActiveProfile, __readCookieValue } from './auth';
 import { type CareCirclePermission, hasPermission } from './permissions';
 
-export async function resolveProfileAccess(userId: string, profileId?: string) {
-  const activeProfile = await getActiveProfile(userId);
-  const resolvedProfileId = profileId || activeProfile?.id;
+export async function resolveProfileAccess(userId: string, profileId?: string, activeProfile?: { id: string } | null) {
+  const resolvedActiveProfile = activeProfile ?? await getActiveProfile(userId);
+  const resolvedProfileId = profileId || resolvedActiveProfile?.id;
   if (!resolvedProfileId) return null;
 
   const owned = await prisma.familyProfile.findFirst({ where: { id: resolvedProfileId, userId } });
@@ -25,18 +25,18 @@ export async function resolveProfileAccess(userId: string, profileId?: string) {
   };
 }
 
-export async function resolveActiveProfileAccess(userId: string) {
-  const activeProfile = await getActiveProfile(userId);
-  if (!activeProfile) return null;
+export async function resolveActiveProfileAccess(userId: string, activeProfile?: { id: string } | null) {
+  const resolvedActiveProfile = activeProfile ?? await getActiveProfile(userId);
+  if (!resolvedActiveProfile) return null;
 
   const activeProfileId = await __readCookieValue('wellsync_active_profile_id');
   if (activeProfileId) {
-    const access = await resolveProfileAccess(userId, activeProfileId);
+    const access = await resolveProfileAccess(userId, activeProfileId, resolvedActiveProfile);
     if (!access) return null;
     return access;
   }
 
-  return resolveProfileAccess(userId, activeProfile.id);
+  return resolveProfileAccess(userId, resolvedActiveProfile.id, resolvedActiveProfile);
 }
 
 export function canUsePermission(access: Awaited<ReturnType<typeof resolveProfileAccess>> | null, permission: CareCirclePermission) {

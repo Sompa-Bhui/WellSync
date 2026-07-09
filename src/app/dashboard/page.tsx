@@ -103,13 +103,15 @@ export default function DashboardPage() {
 
         {/* Needs Attention / Alerts Panel */}
         {data.alerts && data.alerts.length > 0 && (
-          <div className="bg-amber-950/20 border border-amber-900/40 rounded-xl p-5 flex items-start space-x-4">
-            <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+          <div className="rounded-xl border border-amber-400 bg-[#FFF7E6] p-5 flex items-start space-x-4 text-[#4B5563]">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-[#D97706]">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
             <div className="space-y-1.5 flex-1">
-              <h4 className="text-sm font-bold text-amber-400">Needs Attention</h4>
+              <h4 className="text-sm font-bold text-[#92400E]">Needs Attention</h4>
               <ul className="space-y-1">
                 {data.alerts.map((alert: string, idx: number) => (
-                  <li key={idx} className="text-xs text-muted-foreground list-disc list-inside">
+                  <li key={idx} className="text-xs text-[#4B5563] list-disc list-inside">
                     {alert}
                   </li>
                 ))}

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import DashboardShell from '@/src/components/DashboardShell';
 import { Button, Card, Input, Select } from '@/src/components/ui/primitives';
+import { useAuth } from '@/src/context/AuthContext';
 
 type PermissionMap = Record<string, boolean>;
 type ItemStatus = 'pending' | 'accepted' | 'declined' | 'expired' | 'revoked';
@@ -86,6 +87,7 @@ function Badge({ children }: { children: React.ReactNode }) {
 }
 
 export default function CareCirclePage() {
+  const { familyProfiles } = useAuth();
   const [data, setData] = useState<Response | null>(null);
   const [audits, setAudits] = useState<AuditLog[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -122,6 +124,14 @@ export default function CareCirclePage() {
     if (auditFilter === 'all') return audits;
     return audits.filter((item) => item.action.includes(auditFilter.toUpperCase()));
   }, [audits, auditFilter]);
+
+  const readableAuditTarget = (target: string) => {
+    const match = target.match(/^FamilyProfile:(.+)$/);
+    if (!match) return target;
+    const profileId = match[1];
+    const profile = familyProfiles.find((item) => item.id === profileId);
+    return profile ? `${profile.name} (${profile.relationship})` : 'Profile';
+  };
 
   const submitInvite = async () => {
     setSubmitting(true);
@@ -223,7 +233,18 @@ export default function CareCirclePage() {
               <Badge>In-app invitation</Badge>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <Input label="Family profile ID" value={inviteForm.familyProfileId} onChange={(e) => setInviteForm({ ...inviteForm, familyProfileId: e.target.value })} />
+              <Select
+                label="Family profile"
+                value={inviteForm.familyProfileId}
+                onChange={(e) => setInviteForm({ ...inviteForm, familyProfileId: e.target.value })}
+                options={[
+                  { value: '', label: 'Select an accessible profile' },
+                  ...familyProfiles.map((profile) => ({
+                    value: profile.id,
+                    label: `${profile.name} (${profile.relationship === 'SELF' ? 'You' : profile.relationship.toLowerCase()})`,
+                  })),
+                ]}
+              />
               <Input label="Email" value={inviteForm.email} onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })} />
               <Select label="Role" value={inviteForm.role} onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })} options={[{ value: 'viewer', label: 'Viewer' }, { value: 'caregiver', label: 'Caregiver' }, { value: 'manager', label: 'Manager' }]} />
               <Input label="Relationship label" value={inviteForm.relationshipLabel} onChange={(e) => setInviteForm({ ...inviteForm, relationshipLabel: e.target.value })} />
@@ -350,7 +371,7 @@ export default function CareCirclePage() {
                   <span className="font-semibold">{item.action}</span>
                   <span className="text-xs text-muted-foreground">{new Date(item.timestamp).toLocaleString()}</span>
                 </div>
-                <div className="text-xs text-muted-foreground">{item.target}</div>
+                <div className="text-xs text-muted-foreground">{readableAuditTarget(item.target)}</div>
               </div>
             )) : <div className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">No audit entries available.</div>}
           </div>

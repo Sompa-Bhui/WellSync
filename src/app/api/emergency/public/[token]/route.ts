@@ -3,8 +3,12 @@ import { prisma } from '@/src/lib/db';
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ token: string }> }) {
   const { token } = await ctx.params;
-  const profile = await prisma.emergencyProfile.findUnique({ where: { token }, include: { contacts: { where: { active: true }, orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }] } } });
+  const profile = await prisma.emergencyProfile.findUnique({ where: { token } });
   if (!profile || !profile.active || (profile.expiresAt && profile.expiresAt < new Date())) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  const contacts = await prisma.emergencyContact.findMany({
+    where: { familyProfileId: profile.familyProfileId, active: true },
+    orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+  });
   await prisma.emergencyAccessLog.create({ data: { familyProfileId: profile.familyProfileId, emergencyProfileId: profile.id, tokenRef: token.slice(0, 12), requestMeta: JSON.stringify({ ua: req.headers.get('user-agent') || '' }).slice(0, 200) } });
   const enabled = new Set(JSON.parse(profile.publicFields || '[]'));
   return NextResponse.json({
@@ -22,7 +26,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ token: stri
     primaryDoctor: enabled.has('primaryDoctor') ? profile.primaryDoctor : null,
     insuranceNote: enabled.has('insuranceNote') ? profile.insuranceNote : null,
     emergencyNote: enabled.has('emergencyNote') ? profile.emergencyNote : null,
-    contacts: enabled.has('contacts') ? profile.contacts.map((contact) => ({
+    contacts: enabled.has('contacts') ? contacts.map((contact) => ({
       name: contact.name,
       relationship: contact.relationship,
       phone: contact.phone,

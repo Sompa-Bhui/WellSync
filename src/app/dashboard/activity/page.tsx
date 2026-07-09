@@ -25,6 +25,14 @@ export default function ActivityPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ type: 'WALKING', durationMinutes: '', distance: '', steps: '', notes: '', date: new Date().toISOString().slice(0, 10), timestamp: '' });
 
+  const combineDateAndTime = (date: string, time: string) => {
+    if (!date || !time) return '';
+    const [hours, minutes] = time.split(':');
+    const value = new Date(`${date}T00:00:00`);
+    value.setHours(Number(hours), Number(minutes), 0, 0);
+    return value.toISOString();
+  };
+
   const fetchEntries = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -57,7 +65,13 @@ export default function ActivityPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const payload = { ...form, durationMinutes: Number(form.durationMinutes), distance: form.distance || null, steps: form.steps || null, timestamp: form.timestamp || undefined };
+    const payload = {
+      ...form,
+      durationMinutes: Number(form.durationMinutes),
+      distance: form.distance || null,
+      steps: form.steps || null,
+      timestamp: form.timestamp ? combineDateAndTime(form.date, form.timestamp) : undefined,
+    };
     const res = await fetch(editingId ? `/api/activity/${editingId}` : '/api/activity', {
       method: editingId ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -79,7 +93,7 @@ export default function ActivityPage() {
       steps: entry.steps ? String(entry.steps) : '',
       notes: entry.notes || '',
       date: entry.date,
-      timestamp: entry.timestamp ? new Date(entry.timestamp).toISOString().slice(0, 16) : '',
+      timestamp: entry.timestamp ? new Date(entry.timestamp).toISOString().slice(11, 16) : '',
     });
   };
 
@@ -116,7 +130,7 @@ export default function ActivityPage() {
             <Input label="Date" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required />
             <Input label="Distance (km)" type="number" step="0.1" value={form.distance} onChange={(e) => setForm({ ...form, distance: e.target.value })} />
             <Input label="Steps" type="number" value={form.steps} onChange={(e) => setForm({ ...form, steps: e.target.value })} />
-            <Input label="Time" type="datetime-local" value={form.timestamp} onChange={(e) => setForm({ ...form, timestamp: e.target.value })} />
+            <Input label="Time" type="time" value={form.timestamp} onChange={(e) => setForm({ ...form, timestamp: e.target.value })} />
             <div className="md:col-span-3"><Textarea label="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
             <div className="md:col-span-3 flex justify-end"><Button type="submit">{editingId ? 'Update activity' : 'Add activity'}</Button></div>
           </form>
