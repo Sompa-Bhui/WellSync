@@ -26,7 +26,7 @@ async function applyMigrations() {
   await mkdir(prismaDir, { recursive: true });
   const db = new DatabaseSync(dbPath);
   try {
-    const migrationsDir = path.join(prismaDir, 'migrations');
+    const migrationsDir = path.join(prismaDir, 'archive', 'sqlite-migrations');
     const migrations = [
       path.join(migrationsDir, '20260706000000_init', 'migration.sql'),
       path.join(migrationsDir, '20260707000000_care_circle_emergency', 'migration.sql'),
