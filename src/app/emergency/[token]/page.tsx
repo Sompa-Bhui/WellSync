@@ -1,4 +1,5 @@
 import { prisma } from '@/src/lib/db';
+import { areContactsPublic, parsePublicFields } from '@/src/lib/emergency';
 
 export default async function EmergencyPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -11,7 +12,8 @@ export default async function EmergencyPage({ params }: { params: Promise<{ toke
     return <div className="p-6">Emergency profile unavailable.</div>;
   }
 
-  const enabled = new Set(JSON.parse(profile.publicFields || '[]'));
+  const enabled = new Set(parsePublicFields(profile.publicFields));
+  const includeContacts = areContactsPublic(profile.publicFields);
   const data = {
     preferredName: enabled.has('preferredName') ? profile.preferredName : null,
     dateOfBirth: enabled.has('dateOfBirth') ? profile.dateOfBirth : null,
@@ -22,7 +24,7 @@ export default async function EmergencyPage({ params }: { params: Promise<{ toke
     primaryDoctor: enabled.has('primaryDoctor') ? profile.primaryDoctor : null,
     insuranceNote: enabled.has('insuranceNote') ? profile.insuranceNote : null,
     emergencyNote: enabled.has('emergencyNote') ? profile.emergencyNote : null,
-    contacts: enabled.has('contacts') ? profile.contacts.map((contact) => ({
+    contacts: includeContacts ? profile.contacts.map((contact) => ({
       name: contact.name,
       relationship: contact.relationship,
       phone: contact.phone,

@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import DashboardShell from '@/src/components/DashboardShell';
 import EmergencyQr from '@/src/components/emergency/EmergencyQr';
 import { Button, Card, Input, Textarea } from '@/src/components/ui/primitives';
+import { parsePublicFields } from '@/src/lib/emergency';
 import { Check, RefreshCw, ShieldAlert } from 'lucide-react';
 
 type EmergencyData = {
@@ -46,7 +47,15 @@ const EMPTY_FORM = {
   primaryDoctor: '',
   insuranceNote: '',
   emergencyNote: '',
-  publicFields: ['preferredName', 'bloodType', 'allergies', 'criticalConditions', 'contacts'] as string[],
+  publicFields: ['preferredName', 'bloodType', 'allergies', 'criticalConditions'] as string[],
+};
+
+const TOKEN_STATUS_LABELS: Record<'active' | 'revoked' | 'expired' | 'missing' | 'setup-required', string> = {
+  active: 'ACTIVE',
+  revoked: 'REVOKED',
+  expired: 'EXPIRED',
+  missing: 'MISSING',
+  'setup-required': 'SETUP REQUIRED',
 };
 
 function formatTimestamp(value: string) {
@@ -88,8 +97,7 @@ export default function EmergencyDashboardPage() {
         emergencyNote: result?.emergencyNote ?? '',
         publicFields: (() => {
           try {
-            const parsed = JSON.parse(result?.publicFields || '[]');
-            return Array.isArray(parsed) && parsed.length ? parsed : EMPTY_FORM.publicFields;
+            return parsePublicFields(result?.publicFields);
           } catch {
             return EMPTY_FORM.publicFields;
           }
@@ -115,6 +123,8 @@ export default function EmergencyDashboardPage() {
   }, []);
 
   const publicFieldSet = useMemo(() => new Set(form.publicFields), [form.publicFields]);
+  const hasEmergencyProfile = Boolean(data);
+  const tokenState = hasEmergencyProfile ? data!.tokenStatus : 'setup-required';
 
   const saveProfile = async () => {
     setSaving(true);
@@ -158,14 +168,16 @@ export default function EmergencyDashboardPage() {
             <h1 className="text-3xl font-extrabold tracking-tight">Public emergency card</h1>
             <p className="text-sm text-muted-foreground">Only fields you explicitly enable appear on the public page.</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm" onClick={() => void rotateToken(true)}>
-              <RefreshCw className="mr-2 h-4 w-4" /> Rotate
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => void rotateToken(false)}>
-              Revoke
-            </Button>
-          </div>
+          {hasEmergencyProfile ? (
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" onClick={() => void rotateToken(true)} disabled={!data?.token}>
+                <RefreshCw className="mr-2 h-4 w-4" /> Rotate
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => void rotateToken(false)} disabled={!data?.token}>
+                Revoke
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         {error ? (
@@ -245,11 +257,11 @@ export default function EmergencyDashboardPage() {
               </div>
               {data ? (
                 <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold uppercase tracking-wide">
-                  {data.tokenStatus}
+                  {TOKEN_STATUS_LABELS[tokenState]}
                 </span>
               ) : (
                 <span className="rounded-full border border-border px-3 py-1 text-xs font-semibold uppercase tracking-wide">
-                  missing
+                  {TOKEN_STATUS_LABELS[tokenState]}
                 </span>
               )}
             </div>
@@ -266,7 +278,7 @@ export default function EmergencyDashboardPage() {
               </>
             ) : (
               <div className="rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">
-                No emergency profile is configured yet. Save the form to create one and generate a public emergency card.
+                Save your emergency profile to create your emergency card and QR code.
               </div>
             )}
           </Card>

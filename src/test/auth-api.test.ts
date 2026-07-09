@@ -525,6 +525,83 @@ test('emergency public route limits leakage to visible fields only', async (t) =
     },
   ]);
 
+  const privacyProfile = await prisma.familyProfile.create({
+    data: { userId: fixture.ownerA.id, name: 'Privacy Profile', relationship: 'SELF' },
+  });
+  const privateProfile = await prisma.emergencyProfile.create({
+    data: {
+      familyProfileId: privacyProfile.id,
+      preferredName: 'Private Setup',
+      bloodType: 'B+',
+      publicFields: JSON.stringify(['preferredName']),
+      token: `private-token-${Date.now()}`,
+      active: true,
+    },
+  });
+  await prisma.emergencyContact.create({
+    data: {
+      familyProfileId: privacyProfile.id,
+      name: 'Private Contact',
+      relationship: 'Sibling',
+      phone: '+1-444-555-6666',
+      alternatePhone: null,
+      priority: 1,
+      notes: 'Hidden note',
+      active: true,
+    },
+  });
+  const privateRes = await callRoute('./../app/api/emergency/public/[token]/route', 'GET', `http://localhost/api/emergency/public/${privateProfile.token}`, {}, { token: privateProfile.token });
+  assert.equal(privateRes.status, 200);
+  const privateBody = await jsonResponse(privateRes);
+  assert.deepEqual(privateBody.contacts, []);
+  assert.equal(privateBody.id, undefined);
+
+  const optInProfile = await prisma.emergencyProfile.update({
+    where: { id: privateProfile.id },
+    data: { publicFields: JSON.stringify(['preferredName', 'contacts']) },
+  });
+  const optInRes = await callRoute('./../app/api/emergency/public/[token]/route', 'GET', `http://localhost/api/emergency/public/${optInProfile.token}`, {}, { token: optInProfile.token });
+  assert.equal(optInRes.status, 200);
+  const optInBody = await jsonResponse(optInRes);
+  assert.equal(optInBody.contacts.length, 1);
+  assert.equal(optInBody.contacts[0].name, 'Private Contact');
+  assert.equal(optInBody.contacts[0].notes, undefined);
+  assert.equal(optInBody.contacts[0].active, undefined);
+  assert.equal(optInBody.contacts[0].id, undefined);
+
+  const optOutProfile = await prisma.emergencyProfile.update({
+    where: { id: privateProfile.id },
+    data: { publicFields: JSON.stringify(['preferredName']) },
+  });
+  const optOutRes = await callRoute('./../app/api/emergency/public/[token]/route', 'GET', `http://localhost/api/emergency/public/${optOutProfile.token}`, {}, { token: optOutProfile.token });
+  assert.equal(optOutRes.status, 200);
+  const optOutBody = await jsonResponse(optOutRes);
+  assert.deepEqual(optOutBody.contacts, []);
+
+  await prisma.emergencyProfile.update({
+    where: { id: privateProfile.id },
+    data: { publicFields: null },
+  });
+  const legacyMissingRes = await callRoute('./../app/api/emergency/public/[token]/route', 'GET', `http://localhost/api/emergency/public/${privateProfile.token}`, {}, { token: privateProfile.token });
+  assert.equal(legacyMissingRes.status, 200);
+  const legacyMissingBody = await jsonResponse(legacyMissingRes);
+  assert.deepEqual(legacyMissingBody.contacts, []);
+
+  await prisma.emergencyProfile.update({
+    where: { id: privateProfile.id },
+    data: { publicFields: '{malformed' },
+  });
+  const malformedRes = await callRoute('./../app/api/emergency/public/[token]/route', 'GET', `http://localhost/api/emergency/public/${privateProfile.token}`, {}, { token: privateProfile.token });
+  assert.equal(malformedRes.status, 200);
+  const malformedBody = await jsonResponse(malformedRes);
+  assert.deepEqual(malformedBody.contacts, []);
+
+  await prisma.$transaction([
+    prisma.emergencyContact.deleteMany({ where: { familyProfileId: privacyProfile.id } }),
+    prisma.emergencyProfile.delete({ where: { id: privateProfile.id } }),
+    prisma.familyProfile.delete({ where: { id: privacyProfile.id } }),
+  ]);
+
   const expired = await prisma.emergencyProfile.create({
     data: {
       familyProfileId: fixture.profileB.id,

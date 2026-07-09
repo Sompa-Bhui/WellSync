@@ -9,7 +9,7 @@ function token() {
   return crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
 }
 
-const DEFAULT_PUBLIC_FIELDS = ['preferredName', 'bloodType', 'allergies', 'criticalConditions', 'contacts'];
+const DEFAULT_PUBLIC_FIELDS = ['preferredName', 'bloodType', 'allergies', 'criticalConditions'];
 
 function normalizePublicFields(value: unknown) {
   const fields = Array.isArray(value) ? value.map((field) => String(field)) : DEFAULT_PUBLIC_FIELDS;
